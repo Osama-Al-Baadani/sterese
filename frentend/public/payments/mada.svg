@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 32" fill="none">
+  <rect x="0.5" y="0.5" width="51" height="31" rx="4" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1" />
+  <rect x="5.5" y="8" width="16" height="6.5" rx="1" fill="#0084C7" />
+  <rect x="5.5" y="16.5" width="16" height="6.5" rx="1" fill="#78BE20" />
+  <text x="24" y="14" font-family="'Cairo', system-ui, -apple-system, sans-serif" font-weight="800" font-size="9.5" fill="#1A202C">مدى</text>
+  <text x="24.5" y="22" font-family="'Cairo', system-ui, -apple-system, sans-serif" font-weight="800" font-size="8" letter-spacing="-0.2px" fill="#1A202C">mada</text>
+</svg>
+

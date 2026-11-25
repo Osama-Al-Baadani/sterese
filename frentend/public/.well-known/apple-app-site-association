@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "67M8YHJ674.sa.storeseco.ecoapp",
+        "paths": ["/app/*", "/product/*"]
+      }
+    ]
+  }
+}

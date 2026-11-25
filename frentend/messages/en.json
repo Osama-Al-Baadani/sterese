@@ -1,0 +1,94 @@
+{
+  "meta": {
+    "brand": "Al Makhazen Al Eqtisadeya",
+    "defaultTitle": "Al Makhazen Al Eqtisadeya | Your First Online Store",
+    "description": "Everything you need in one app — exclusive offers, high quality, and faster delivery from Al Makhazen Al Eqtisadeya."
+  },
+  "nav": {
+    "searchPlaceholder": "Search for a product...",
+    "language": "العربية",
+    "home": "Home",
+    "allDepartments": "All Departments",
+    "store": "Store",
+    "cart": "Cart",
+    "favorites": "Favorites",
+    "account": "Account",
+    "categories": "Categories",
+    "brandName": "Al Makhazen Al Eqtisadeya",
+    "defaultCity": "Riyadh"
+  },
+  "footer": {
+    "brandTagline": "Your First Online Store",
+    "tagline": "Your first online store — exclusive offers, high quality, and faster delivery.",
+    "quickLinks": "Quick Links",
+    "home": "Home",
+    "browse": "Browse Products",
+    "about": "About Us",
+    "contact": "Contact Us",
+    "storePolicies": "Store Policies",
+    "terms": "Terms & Conditions",
+    "privacy": "Privacy Policy",
+    "returns": "Return Policy",
+    "faq": "FAQ",
+    "contactUs": "Contact Us",
+    "ourBranches": "Our Branches",
+    "mainBranch": "Riyadh Branch (Main)",
+    "branchAddress": "Riyadh - Dhahrat Al Badi'ah",
+    "viewOnMap": "View on Google Maps",
+    "rights": "All rights reserved.",
+    "paymentMethods": "Secure & Certified Payment Methods",
+    "paymentDescription": "Safe and reliable electronic payment options via Mada, Visa, Mastercard, and Apple Pay with full end-to-end data encryption.",
+    "downloadApp": "Download App",
+    "maroofVerified": "Verified by Maroof"
+  },
+  "home": {
+    "shopByDepartment": "Shop by Your Favorite Department",
+    "everythingInOnePlace": "Everything you need in one place",
+    "seeAll": "See All",
+    "featuresTitle": "Because Your Comfort Matters",
+    "feature1": "Premium Customer Support",
+    "feature2": "Ongoing Deals & Discounts",
+    "feature3": "Fast Delivery",
+    "feature4": "100% Authentic Products"
+  },
+  "auth": {
+    "title": "Sign In",
+    "subtitle": "Sign in with your mobile number to save addresses and track orders",
+    "phoneLabel": "Mobile Number",
+    "sendOtp": "Send Verification Code",
+    "otpSentTo": "We sent a 4-digit verification code to {phone}",
+    "otpLabel": "Verification Code",
+    "confirm": "Verify",
+    "changePhone": "Change mobile number",
+    "welcomeNamePrompt": "Welcome! What should we call you?",
+    "fullName": "Full Name",
+    "fullNamePlaceholder": "e.g. Mohammed Ahmed",
+    "continue": "Continue",
+    "nameRequired": "Name is required",
+    "otpSendFailed": "Failed to send verification code",
+    "otpInvalid": "Invalid verification code"
+  },
+  "orders": {
+    "title": "My Orders",
+    "loading": "Loading...",
+    "empty": "You don't have any orders yet",
+    "orderNumber": "Order #{number}",
+    "productFallback": "Product #{id}",
+    "showLess": "Show less",
+    "showMore": "{count, plural, one {Show more (1 more item)} other {Show more ({count} more items)}}",
+    "total": "Total",
+    "viewReceipt": "View Order Receipt",
+    "status": {
+      "pending": "⏳ Pending",
+      "confirmed": "✅ Confirmed",
+      "preparing": "📦 Preparing",
+      "shipped": "🚚 On the Way",
+      "delivered": "🎉 Delivered",
+      "cancelled": "❌ Cancelled"
+    },
+    "payment": {
+      "cod": "Cash on Delivery",
+      "card": "Bank Card"
+    }
+  }
+}

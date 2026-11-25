@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #1a2742;
+
+  /* Brand — matches the app's actual identity: gold (AppColors.primary) is
+     the site's main interactive color (buttons, links, active states,
+     focus rings), turning to blue (AppColors.secondary) on hover/press —
+     not a lighter/darker shade of the same hue like a normal 600→700 step,
+     that hue swap on interaction is deliberate, matching the app exactly.
+     600/700 are the exact Flutter primary/secondary values; 50/100/200/500
+     are lightened gold tints to fill out the scale, 800 the darker
+     secondaryDark blue for anything needing more emphasis than 700. */
+  --color-brand-50: #fdf6e6;
+  --color-brand-100: #fbebc4;
+  --color-brand-200: #f6d891;
+  --color-brand-500: #f0b21f;
+  --color-brand-600: #f0b21f;
+  --color-brand-700: #1b75bb;
+  --color-brand-800: #1356a0;
+
+  /* Brand gold — same values as brand-600 above, kept as its own scale for
+     the badges/ratings/discount labels that reference it by name directly
+     rather than through the interactive "brand" scale. */
+  --color-gold-400: #ffd150;
+  --color-gold-500: #f0b21f;
+  --color-gold-600: #c9900e;
+
+  /* Navy — body text, matches the Flutter app's textPrimary. */
+  --color-navy-900: #1a2742;
+  --color-navy-700: #2a3e62;
+  --color-navy-500: #4e6080;
+  --color-navy-300: #9bacc0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-cairo);
+
+  --color-brand-50: var(--color-brand-50);
+  --color-brand-100: var(--color-brand-100);
+  --color-brand-200: var(--color-brand-200);
+  --color-brand-500: var(--color-brand-500);
+  --color-brand-600: var(--color-brand-600);
+  --color-brand-700: var(--color-brand-700);
+  --color-brand-800: var(--color-brand-800);
+
+  --color-gold-400: var(--color-gold-400);
+  --color-gold-500: var(--color-gold-500);
+  --color-gold-600: var(--color-gold-600);
+
+  --color-navy-900: var(--color-navy-900);
+  --color-navy-700: var(--color-navy-700);
+  --color-navy-500: var(--color-navy-500);
+  --color-navy-300: var(--color-navy-300);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Official Saudi Riyal symbol (SAMA, approved Feb 2025 / Unicode 17
+   U+20C1) — self-hosted since almost no device has a system font with
+   this glyph yet. Used via SarPrice.tsx, never typed directly. */
+@font-face {
+  font-family: "saudi_riyal";
+  src: url("/fonts/saudi_riyal.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Room for the fixed mobile bottom nav (MobileBottomNav.tsx) so it never
+   covers the last bit of page content — matches its md:hidden breakpoint. */
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Wrap .input in @layer components so Tailwind v4 padding utilities (pl-11, ps-11, pr-9) override its default padding instead of being overridden by unlayered CSS. */
+@layer components {
+  /* Shared text-input look — form fields across checkout/account pages. */
+  .input {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(26 39 66 / 10%);
+    background: white;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--color-navy-900);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .input:focus {
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 20%, transparent);
+  }
+}
+
+/* Rotating hero tiles (GridTiles) — each new banner slides in from the
+   side instead of just cutting over, so the rotation reads as motion. */
+@keyframes tile-slide-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.tile-slide-in {
+  animation: tile-slide-in 0.6s ease-out;
+}
+
+/* Isolates a single element (e.g. an order invoice) for printing/"Save as
+   PDF" — everything else on the page is hidden so only #invoice-print-area
+   ends up on the printed page. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #invoice-print-area,
+  #invoice-print-area * {
+    visibility: visible;
+  }
+
+  #invoice-print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+}

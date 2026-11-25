@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "sa.storeseco.app",
+      "sha256_cert_fingerprints": [
+        "84:3C:8D:68:D7:F8:B9:DC:0A:33:5B:51:F5:2B:62:85:2A:99:00:8F:C1:7D:AD:C6:01:8D:E6:B8:3A:89:EC:AA",
+        "81:39:40:76:9E:9D:5F:9C:50:30:8B:47:9E:B4:1B:F0:8B:C2:F7:72:4B:2A:4B:16:F4:20:63:05:46:2F:73:5A"
+      ]
+    }
+  }
+]

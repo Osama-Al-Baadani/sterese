@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "brand": "المخازن الاقتصادية",
+    "defaultTitle": "المخازن الاقتصادية | متجرك الإلكتروني الأول",
+    "description": "كل احتياجاتك في تطبيق واحد — عروض حصرية، جودة عالية، وتوصيل أسرع من المخازن الاقتصادية."
+  },
+  "nav": {
+    "searchPlaceholder": "ابحث عن منتج...",
+    "language": "English",
+    "home": "الرئيسية",
+    "allDepartments": "كل الأقسام",
+    "store": "المتجر",
+    "cart": "السلة",
+    "favorites": "المفضلة",
+    "account": "حسابي",
+    "categories": "الأقسام",
+    "brandName": "المخازن الاقتصادية",
+    "defaultCity": "الرياض"
+  },
+  "footer": {
+    "brandTagline": "متجرك الإلكتروني الأول",
+    "tagline": "متجرك الإلكتروني الأول — عروض حصرية، جودة عالية، وتوصيل أسرع.",
+    "quickLinks": "روابط سريعة",
+    "home": "الرئيسية",
+    "browse": "تصفح المنتجات",
+    "about": "من نحن",
+    "contact": "تواصل معنا",
+    "storePolicies": "سياسات المتجر",
+    "terms": "الشروط والأحكام",
+    "privacy": "سياسة الخصوصية",
+    "returns": "سياسة الإرجاع",
+    "faq": "الأسئلة الشائعة",
+    "contactUs": "تواصل معنا",
+    "ourBranches": "فروعنا",
+    "mainBranch": "فرع الرياض (الرئيسي)",
+    "branchAddress": "الرياض - حي ظهرة البديعة",
+    "viewOnMap": "عرض على الخريطة",
+    "rights": "جميع الحقوق محفوظة.",
+    "paymentMethods": "طرق دفع آمنة ومعتمدة",
+    "paymentDescription": "خيارات دفع إلكتروني آمنة وموثوقة عبر بطاقات مدى (mada)، فيزا (Visa)، ماستركارد (Mastercard)، وآبل باي (Apple Pay) مع تشفير كامل للبيانات.",
+    "downloadApp": "حمّل التطبيق",
+    "maroofVerified": "موثق لدى معروف"
+  },
+  "home": {
+    "shopByDepartment": "تسوق حسب قسمك المفضل",
+    "everythingInOnePlace": "كل ما تحتاجه في مكان واحد",
+    "seeAll": "عرض الكل",
+    "featuresTitle": "ولأن راحتك تهمنا",
+    "feature1": "خدمة عملاء مميزة",
+    "feature2": "عروض وتخفيضات مستمرة",
+    "feature3": "توصيل سريع",
+    "feature4": "منتجات أصلية"
+  },
+  "auth": {
+    "title": "تسجيل الدخول",
+    "subtitle": "سجّل برقم جوالك لحفظ عناوينك ومتابعة طلباتك",
+    "phoneLabel": "رقم الجوال",
+    "sendOtp": "إرسال رمز التحقق",
+    "otpSentTo": "أرسلنا رمز تحقق مكوّن من 4 أرقام إلى {phone}",
+    "otpLabel": "رمز التحقق",
+    "confirm": "تأكيد",
+    "changePhone": "تغيير رقم الجوال",
+    "welcomeNamePrompt": "حياك الله! وش نناديك؟",
+    "fullName": "الاسم الكامل",
+    "fullNamePlaceholder": "مثال: محمد أحمد",
+    "continue": "متابعة",
+    "nameRequired": "الاسم مطلوب",
+    "otpSendFailed": "تعذّر إرسال رمز التحقق",
+    "otpInvalid": "رمز التحقق غير صحيح"
+  }
+}

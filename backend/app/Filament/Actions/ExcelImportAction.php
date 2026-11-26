@@ -3,6 +3,7 @@
 namespace App\Filament\Actions;
 
 use App\Filament\Imports\ProductImporter;
+use App\Filament\Resources\ProductResource\Pages\ListProducts;
 use App\Models\Category;
 use Closure;
 use DateTimeInterface;
@@ -10,6 +11,7 @@ use Filament\Actions\ImportAction;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -162,6 +164,53 @@ class ExcelImportAction extends ImportAction
                     ->visible(fn (Get $get): bool => $get('file') instanceof TemporaryUploadedFile),
             ],
         ));
+
+        // Execute Product imports in ONE SINGLE FAST BULK BATCH (instead of slow chunked queue jobs)
+        $parentAction = $this->getActionFunction();
+        $this->action(function (ImportAction $action, array $data, Component $livewire) use ($parentAction): void {
+            if ($action->getImporter() !== ProductImporter::class) {
+                if ($parentAction instanceof Closure) {
+                    app()->call($parentAction, ['action' => $action, 'data' => $data]);
+                }
+                return;
+            }
+
+            /** @var TemporaryUploadedFile $csvFile */
+            $csvFile = $data['file'];
+            $csvStream = $this->getUploadedFileStream($csvFile);
+            if (!$csvStream) {
+                return;
+            }
+
+            $csvReader = CsvReader::from($csvStream);
+            if (filled($csvDelimiter = $this->getCsvDelimiter($csvReader))) {
+                $csvReader->setDelimiter($csvDelimiter);
+            }
+            $csvReader->setHeaderOffset($action->getHeaderOffset() ?? 0);
+            $records = iterator_to_array((new Statement)->process($csvReader)->getRecords());
+
+            $options = array_merge(
+                $action->getOptions(),
+                Arr::except($data, ['file', 'columnMap']),
+            );
+
+            $result = ProductImporter::bulkImportOneShot(
+                rows: $records,
+                columnMap: $data['columnMap'] ?? [],
+                options: $options,
+                fileName: $csvFile->getClientOriginalName(),
+            );
+
+            ListProducts::clearProductStatsCache();
+
+            Notification::make()
+                ->title('اكتمل الاستيراد دفعة واحدة بنجاح')
+                ->body("تم استيراد وتحديث {$result['imported']} منتج دفعة واحدة بنجاح" . ($result['skipped'] > 0 ? " (تم تخطي {$result['skipped']} صف فارغ)." : '.'))
+                ->success()
+                ->send();
+
+            $livewire->dispatch('$refresh');
+        });
     }
 
     public function getFileValidationRules(): array
@@ -244,7 +293,14 @@ class ExcelImportAction extends ImportAction
      */
     public function convertXlsxToCsvStream(string $xlsxPath)
     {
-        $stream = fopen('php://temp', 'r+b');
+        // Cache converted CSV on disk by file hash so Livewire doesn't re-parse the XLSX 4 times
+        $hash = @md5_file($xlsxPath);
+        $cachedCsvPath = $hash ? sys_get_temp_dir() . '/xlsx_csv_' . $hash . '.csv' : null;
+        if ($cachedCsvPath && is_file($cachedCsvPath) && filesize($cachedCsvPath) > 0) {
+            return fopen($cachedCsvPath, 'rb');
+        }
+
+        $stream = $cachedCsvPath ? fopen($cachedCsvPath, 'w+b') : fopen('php://temp', 'r+b');
         if (!$stream) {
             return false;
         }

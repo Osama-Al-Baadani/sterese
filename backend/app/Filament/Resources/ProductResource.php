@@ -666,13 +666,11 @@ class ProductResource extends Resource
                 SelectFilter::make('categories')
                     ->label('القسم')
                     ->relationship('categories', 'name')
-                    ->searchable()
-                    ->preload(),
+                    ->searchable(),
                 SelectFilter::make('brand_setting_id')
                     ->label('البراند')
                     ->relationship('brand', 'name')
-                    ->searchable()
-                    ->preload(),
+                    ->searchable(),
                 TernaryFilter::make('on_sale')
                     ->label('العروض والخصومات'),
             ])
@@ -692,7 +690,9 @@ class ProductResource extends Resource
                                 ->success()
                                 ->title('تم نسخ المنتج كمسودة بنجاح')
                         ),
-                    DeleteAction::make()->label('حذف'),
+                    DeleteAction::make()
+                        ->label('حذف')
+                        ->after(fn () => Pages\ListProducts::clearProductStatsCache()),
                 ]),
             ])
             ->groupedBulkActions([
@@ -700,24 +700,43 @@ class ProductResource extends Resource
                     ->label('تحويل إلى متوفر')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->action(fn (Collection $records) => $records->each->update(['stock_status' => 'instock'])),
+                    ->action(function (Collection $records): void {
+                        Product::whereIn('id', $records->pluck('id')->all())->update(['stock_status' => 'instock']);
+                        Pages\ListProducts::clearProductStatsCache();
+                    }),
 
                 BulkAction::make('mark_outofstock')
                     ->label('تحويل إلى نفدت الكمية')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->action(fn (Collection $records) => $records->each->update(['stock_status' => 'outofstock'])),
+                    ->action(function (Collection $records): void {
+                        Product::whereIn('id', $records->pluck('id')->all())->update(['stock_status' => 'outofstock']);
+                        Pages\ListProducts::clearProductStatsCache();
+                    }),
 
                 BulkAction::make('publish_selected')
                     ->label('نشر المحدد')
                     ->icon('heroicon-o-eye')
-                    ->action(fn (Collection $records) => $records->each->update(['status' => 'publish'])),
+                    ->action(function (Collection $records): void {
+                        Product::whereIn('id', $records->pluck('id')->all())->update(['status' => 'publish']);
+                        Pages\ListProducts::clearProductStatsCache();
+                    }),
 
                 ExportBulkAction::make()
                     ->label('تصدير المحدد (Excel / CSV)')
                     ->exporter(ProductExporter::class),
 
-                DeleteBulkAction::make()->label('حذف المحدد'),
+                DeleteBulkAction::make()
+                    ->label('حذف المحدد')
+                    ->action(function (Collection $records): void {
+                        $ids = $records->pluck('id')->all();
+                        if (!empty($ids)) {
+                            \Illuminate\Support\Facades\DB::table('product_category')->whereIn('product_id', $ids)->delete();
+                            \Illuminate\Support\Facades\DB::table('product_tag')->whereIn('product_id', $ids)->delete();
+                            Product::whereIn('id', $ids)->delete();
+                            Pages\ListProducts::clearProductStatsCache();
+                        }
+                    }),
             ]);
     }
 

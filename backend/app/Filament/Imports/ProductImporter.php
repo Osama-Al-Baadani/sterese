@@ -1000,4 +1000,542 @@ class ProductImporter extends Importer
 
         return $body;
     }
+
+    /**
+     * Ultra-fast ONE-SHOT bulk importer: processes all rows in memory and writes
+     * to TiDB/MySQL using bulk SQL inserts & bulk pivot inserts instead of row-by-row queries.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<string, string|null>  $columnMap
+     * @param  array<string, mixed>  $options
+     * @return array{imported: int, skipped: int}
+     */
+    public static function bulkImportOneShot(
+        array $rows,
+        array $columnMap,
+        array $options = [],
+        ?string $fileName = null,
+    ): array {
+        if (empty($rows)) {
+            return ['imported' => 0, 'skipped' => 0];
+        }
+
+        $now = now();
+        $todayStr = $now->toDateString();
+
+        // 1. Preload all Brands, Categories, Tags, and existing Product keys in 4 single queries
+        $brandsByKey = [];
+        foreach (BrandSetting::all() as $b) {
+            if ($b->slug) {
+                $brandsByKey[mb_strtolower($b->slug)] = $b;
+            }
+            $brandsByKey[mb_strtolower($b->name)] = $b;
+            if ($b->name_en) {
+                $brandsByKey[mb_strtolower($b->name_en)] = $b;
+            }
+        }
+
+        $categoriesAll = Category::all();
+        $rootCatsByName = [];
+        $subCatsByParentAndName = [];
+        foreach ($categoriesAll as $c) {
+            if ($c->parent_id === null) {
+                $rootCatsByName[mb_strtolower($c->name)] = $c;
+                if ($c->slug) {
+                    $rootCatsByName[mb_strtolower($c->slug)] = $c;
+                }
+            } else {
+                $subCatsByParentAndName[$c->parent_id . '|' . mb_strtolower($c->name)] = $c;
+            }
+        }
+
+        $tagsByKey = [];
+        foreach (Tag::all() as $t) {
+            $tagsByKey[mb_strtolower($t->name)] = $t->id;
+            if ($t->slug) {
+                $tagsByKey[mb_strtolower($t->slug)] = $t->id;
+            }
+        }
+
+        $existingProducts = \Illuminate\Support\Facades\DB::table('products')
+            ->select(['id', 'sku', 'barcode', 'slug'])
+            ->get();
+
+        $idBySku = [];
+        $idByBarcode = [];
+        $idBySlug = [];
+        $usedSlugs = [];
+        foreach ($existingProducts as $ep) {
+            if ($ep->sku !== null && $ep->sku !== '') {
+                $idBySku[$ep->sku] = (int) $ep->id;
+            }
+            if ($ep->barcode !== null && $ep->barcode !== '') {
+                $idByBarcode[$ep->barcode] = [
+                    'id'  => (int) $ep->id,
+                    'sku' => (string) ($ep->sku ?? ''),
+                ];
+            }
+            if ($ep->slug !== null && $ep->slug !== '') {
+                $idBySlug[$ep->slug] = (int) $ep->id;
+                $usedSlugs[$ep->slug] = (int) $ep->id;
+            }
+        }
+
+        $col = function (array $csvRow, string $field) use ($columnMap): mixed {
+            $header = $columnMap[$field] ?? null;
+            return ($header !== null && $header !== '' && array_key_exists($header, $csvRow))
+                ? $csvRow[$header]
+                : null;
+        };
+
+        $makeUniqueSlug = function (string $raw, ?int $ignoreId = null) use (&$usedSlugs): string {
+            $base = trim((string) preg_replace('/[^\p{Arabic}a-z0-9]+/iu', '-', mb_strtolower($raw)), '-');
+            if ($base === '') {
+                $base = 'product-' . strtolower(\Illuminate\Support\Str::random(6));
+            }
+            $slug = $base;
+            $counter = 2;
+            while (isset($usedSlugs[$slug]) && ($ignoreId === null || $usedSlugs[$slug] !== $ignoreId)) {
+                $slug = "{$base}-{$counter}";
+                $counter++;
+            }
+            $usedSlugs[$slug] = $ignoreId ?? -1;
+            return $slug;
+        };
+
+        $findOrCreateRoot = function (string $name, ?string $firstImage) use (&$rootCatsByName): Category {
+            $k = mb_strtolower(trim($name));
+            if (isset($rootCatsByName[$k])) {
+                return $rootCatsByName[$k];
+            }
+            $cat = Category::create([
+                'name'               => trim($name),
+                'parent_id'          => null,
+                'external_image_url' => $firstImage,
+                'is_active'          => true,
+            ]);
+            $rootCatsByName[$k] = $cat;
+            if ($cat->slug) {
+                $rootCatsByName[mb_strtolower($cat->slug)] = $cat;
+            }
+            return $cat;
+        };
+
+        $nestUnderParent = !array_key_exists('nest_under_parent', $options)
+            || self::parseBool($options['nest_under_parent'], true);
+        $optParentId = (int) ($options['parent_category_id'] ?? 0);
+        $optParentName = trim((string) ($options['parent_category_name'] ?? ''));
+        $optParentCat = $optParentId > 0 ? $categoriesAll->firstWhere('id', $optParentId) : null;
+
+        $toInsert = [];
+        $toUpdate = [];
+        $newSlugBySku = [];
+        // Keyed by row key ("id:123" or "slug:abc") -> ['cats' => int[], 'tags' => int[]]
+        $relationsByKey = [];
+        $imported = 0;
+        $skipped = 0;
+
+        foreach ($rows as $csvRow) {
+            $name = trim((string) ($col($csvRow, 'name') ?? ''));
+            $regularPrice = self::parseNumber($col($csvRow, 'regular_price'));
+            $currentPrice = self::parseNumber($col($csvRow, 'current_price'));
+            $salePrice    = self::parseNumber($col($csvRow, 'sale_price'));
+
+            if (
+                $name === '' ||
+                in_array($name, ['اسم المنتج (عربي)', 'اسم المنتج', 'name', 'Name'], true) ||
+                ($regularPrice === null && $currentPrice === null)
+            ) {
+                $skipped++;
+                continue;
+            }
+
+            if (($regularPrice === null || $regularPrice <= 0) && $currentPrice !== null && $currentPrice > 0) {
+                $regularPrice = $currentPrice;
+            }
+            if ($salePrice !== null && $salePrice <= 0) {
+                $salePrice = null;
+            }
+            if ($salePrice === null && $currentPrice !== null && $regularPrice !== null && $currentPrice > 0 && $currentPrice < $regularPrice) {
+                $salePrice = $currentPrice;
+            }
+
+            $regular = (float) ($regularPrice ?? 0);
+            if ($salePrice !== null && $salePrice > 0 && ($regular <= 0 || $salePrice < $regular)) {
+                $onSale = true;
+                $finalPrice = $salePrice;
+                if ($regular <= 0) {
+                    $regular = $salePrice;
+                }
+            } else {
+                $onSale = false;
+                $salePrice = null;
+                $finalPrice = $regular;
+            }
+
+            $sku = trim((string) ($col($csvRow, 'sku') ?? ''));
+            if ($sku === '') {
+                $sku = trim((string) ($col($csvRow, 'item_number') ?? ''));
+            }
+            $skuVal = $sku !== '' ? $sku : null;
+
+            $barcodeRaw = trim((string) ($col($csvRow, 'barcode') ?? ''));
+            $barcodeVal = $barcodeRaw !== '' ? $barcodeRaw : null;
+
+            $nameEnRaw = trim((string) ($col($csvRow, 'name_en') ?? ''));
+            $nameEnVal = $nameEnRaw !== '' ? $nameEnRaw : null;
+
+            $slugInput = trim((string) ($col($csvRow, 'slug') ?? ''));
+
+            // Match existing product in memory (0 queries)
+            $existingId = null;
+            if ($skuVal !== null && isset($idBySku[$skuVal])) {
+                $existingId = $idBySku[$skuVal];
+            } elseif ($barcodeVal !== null && isset($idByBarcode[$barcodeVal])) {
+                $bcEntry = $idByBarcode[$barcodeVal];
+                if ($skuVal === null || $bcEntry['sku'] === '') {
+                    $existingId = $bcEntry['id'];
+                }
+            } elseif ($slugInput !== '' && isset($idBySlug[$slugInput])) {
+                $existingId = $idBySlug[$slugInput];
+            }
+
+            // Brand resolution in memory
+            $brandId = null;
+            $resolvedBrandName = null;
+            $brandRaw = trim((string) ($col($csvRow, 'brand_name') ?? ''));
+            if ($brandRaw !== '') {
+                $bKey = mb_strtolower($brandRaw);
+                $upper = strtoupper($brandRaw);
+                $mapped = self::BRAND_CODE_MAP[$upper] ?? null;
+                $arabicBrand = $mapped['name'] ?? $brandRaw;
+                $slugBrand = trim((string) preg_replace('/[^\p{Arabic}a-z0-9]+/iu', '-', mb_strtolower($brandRaw)), '-');
+
+                $brandObj = $brandsByKey[$bKey]
+                    ?? $brandsByKey[mb_strtolower($arabicBrand)]
+                    ?? ($slugBrand !== '' ? ($brandsByKey[$slugBrand] ?? null) : null);
+
+                if (!$brandObj) {
+                    $englishBrand = $mapped['name_en'] ?? (preg_match('/^[A-Z0-9\-_ ]+$/', $brandRaw)
+                        ? ucwords(strtolower(str_replace(['-', '_'], ' ', $brandRaw)))
+                        : null);
+                    $brandObj = BrandSetting::create([
+                        'name'      => $arabicBrand,
+                        'name_en'   => $englishBrand,
+                        'slug'      => $slugBrand ?: null,
+                        'is_active' => true,
+                    ]);
+                    $brandsByKey[$bKey] = $brandObj;
+                    $brandsByKey[mb_strtolower($arabicBrand)] = $brandObj;
+                    if ($slugBrand !== '') {
+                        $brandsByKey[$slugBrand] = $brandObj;
+                    }
+                }
+                $brandId = $brandObj->id;
+                $resolvedBrandName = $brandObj->name;
+            }
+
+            // Images
+            $collectedUrls = [];
+            foreach ([
+                trim((string) ($col($csvRow, 'primary_image') ?? '')),
+                trim((string) ($col($csvRow, 'gallery_images') ?? '')),
+                trim((string) ($col($csvRow, 'images_list') ?? '')),
+            ] as $sourceText) {
+                if ($sourceText === '') {
+                    continue;
+                }
+                $parts = preg_split('/[,،|;\r\n]+|\s+(?=https?:\/\/)/iu', $sourceText) ?: [];
+                foreach ($parts as $part) {
+                    $cleanUrl = trim($part);
+                    if (
+                        $cleanUrl !== '' &&
+                        (str_starts_with($cleanUrl, 'http://') || str_starts_with($cleanUrl, 'https://') || str_starts_with($cleanUrl, 'products/'))
+                    ) {
+                        $collectedUrls[] = $cleanUrl;
+                    }
+                }
+            }
+            $urls = array_values(array_unique($collectedUrls));
+            $firstImage = $urls[0] ?? null;
+
+            // Unit
+            $unitVal = trim((string) ($col($csvRow, 'unit') ?? ''));
+            if ($unitVal === '' && preg_match('/(\d+(?:[.,]\d+)?\s*(?:كجم|جم|جرام|مل|لتر|حبة|حبات|قطعة|قطع|مكعبات|شريحة|شرائح))/u', $name, $m)) {
+                $unitVal = trim($m[1]);
+            }
+
+            // Description
+            $catsRaw = trim((string) ($col($csvRow, 'categories_list') ?? ''));
+            $descVal = self::cleanDescription($col($csvRow, 'description'));
+            if ($descVal === null) {
+                $descParts = [$name];
+                if ($resolvedBrandName) {
+                    $descParts[] = 'من ' . $resolvedBrandName;
+                }
+                if ($catsRaw !== '') {
+                    $cNames = array_values(array_filter(
+                        array_map('trim', preg_split('/[,،|]+/u', $catsRaw)),
+                        fn (string $c) => $c !== '' && !str_contains($c, 'العروض')
+                    ));
+                    if (!empty($cNames)) {
+                        $descParts[] = 'ضمن قسم ' . implode(' و', array_slice($cNames, 0, 2));
+                    }
+                }
+                $descVal = implode('، ', $descParts) . ($nameEnVal ? " ({$nameEnVal})" : '') . '.';
+            }
+
+            // Stock & attributes
+            $stockQtyNum = self::parseNumber($col($csvRow, 'stock_quantity'));
+            $stockQty = $stockQtyNum !== null ? (int) $stockQtyNum : null;
+            $manageStockRaw = $col($csvRow, 'manage_stock');
+            $manageStock = ($manageStockRaw === null || $manageStockRaw === '')
+                ? ($stockQty !== null)
+                : self::parseBool($manageStockRaw, true);
+
+            if ($manageStock && $stockQty !== null) {
+                $stockStatus = $stockQty > 0 ? 'instock' : 'outofstock';
+            } else {
+                $stockStatusRaw = $col($csvRow, 'stock_status');
+                $stockStatus = ($stockStatusRaw === null || $stockStatusRaw === '')
+                    ? 'instock'
+                    : (self::parseBool($stockStatusRaw, true) ? 'instock' : 'outofstock');
+            }
+
+            $secNum = self::parseNumber($col($csvRow, 'security_stock'));
+            $securityStock = $secNum !== null ? (int) $secNum : 5;
+            $featured = self::parseBool($col($csvRow, 'featured'), false);
+            $sortNum = self::parseNumber($col($csvRow, 'sort_order'));
+            $sortOrder = $sortNum !== null ? (int) $sortNum : 0;
+            $typeRaw = strtolower(trim((string) ($col($csvRow, 'type') ?? '')));
+            $typeVal = $typeRaw === 'variable' ? 'variable' : 'simple';
+            $bundleNum = self::parseNumber($col($csvRow, 'bundle_qty'));
+            $bundleQty = ($bundleNum !== null && $bundleNum >= 2) ? (int) $bundleNum : null;
+            $weightVal = self::parseNumber($col($csvRow, 'weight_value'));
+
+            $statusRaw = strtolower(trim((string) ($col($csvRow, 'status') ?? '')));
+            $statusVal = in_array($statusRaw, ['draft', '0', 'لا', 'مسودة'], true)
+                ? 'draft'
+                : ($statusRaw === 'private' ? 'private' : 'publish');
+
+            $finalSlug = $makeUniqueSlug($slugInput !== '' ? $slugInput : ($nameEnVal ?: $name), $existingId);
+
+            $rowPayload = [
+                'brand_setting_id'     => $brandId,
+                'name'                 => $name,
+                'name_en'              => $nameEnVal,
+                'slug'                 => $finalSlug,
+                'sku'                  => $skuVal,
+                'barcode'              => $barcodeVal,
+                'unit'                 => $unitVal !== '' ? $unitVal : null,
+                'bundle_qty'           => $bundleQty,
+                'type'                 => $typeVal,
+                'status'               => $statusVal,
+                'published_at'         => $todayStr,
+                'featured'             => $featured ? 1 : 0,
+                'short_description'    => self::cleanDescription($col($csvRow, 'short_description')),
+                'short_description_en' => self::cleanDescription($col($csvRow, 'short_description_en')),
+                'description'          => $descVal,
+                'description_en'       => self::cleanDescription($col($csvRow, 'description_en')),
+                'price'                => $finalPrice,
+                'regular_price'        => $regular,
+                'sale_price'           => $salePrice,
+                'cost_price'           => self::parseNumber($col($csvRow, 'cost_price')),
+                'on_sale'              => $onSale ? 1 : 0,
+                'stock_status'         => $stockStatus,
+                'stock_quantity'       => $stockQty,
+                'security_stock'       => $securityStock,
+                'manage_stock'         => $manageStock ? 1 : 0,
+                'weight_value'         => $weightVal,
+                'sort_order'           => $sortOrder,
+                'images'               => !empty($urls) ? json_encode($urls, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                'updated_at'           => $now,
+            ];
+
+            // Resolve categories in memory
+            $slugsRaw = trim((string) ($col($csvRow, 'category_slugs') ?? ''));
+            $rowMainName = trim((string) ($col($csvRow, 'main_category') ?? ''));
+            $rootParent = null;
+            if ($rowMainName !== '') {
+                $rootParent = $findOrCreateRoot($rowMainName, $firstImage);
+            } elseif ($nestUnderParent) {
+                if ($optParentCat) {
+                    $rootParent = $optParentCat;
+                } elseif ($optParentName !== '') {
+                    $rootParent = $findOrCreateRoot($optParentName, $firstImage);
+                } else {
+                    $detected = self::detectMainCategoryName($fileName, [['category_slugs' => $slugsRaw]]);
+                    if ($detected !== null && $detected !== '') {
+                        $rootParent = $findOrCreateRoot($detected, $firstImage);
+                    }
+                }
+            }
+
+            $effectiveCatsRaw = $catsRaw;
+            if ($effectiveCatsRaw === '' && $rootParent !== null) {
+                $effectiveCatsRaw = (new self(new Import(), [], []))->inferFallbackSubcategoryName($name);
+            }
+
+            $catIds = [];
+            if ($effectiveCatsRaw !== '') {
+                $items = array_values(array_unique(array_filter(array_map('trim', preg_split('/[,،|]+/u', $effectiveCatsRaw)))));
+                $slugsList = $slugsRaw !== ''
+                    ? array_values(array_filter(array_map('trim', preg_split('/[,،|\s]+/u', strtolower($slugsRaw)))))
+                    : [];
+
+                foreach ($items as $idx => $rawItem) {
+                    $chain = array_values(array_filter(array_map('trim', explode('>', $rawItem))));
+                    if (empty($chain)) {
+                        continue;
+                    }
+                    $currentParent = $rootParent;
+                    $lastCat = null;
+                    foreach ($chain as $depth => $stepName) {
+                        if ($depth === 0 && count($chain) > 1 && $currentParent && mb_strtolower($stepName) === mb_strtolower($currentParent->name)) {
+                            continue;
+                        }
+                        $childName = $stepName;
+                        if ($currentParent && mb_strtolower($childName) === mb_strtolower($currentParent->name)) {
+                            $childName = $stepName . ' متنوعة';
+                        }
+                        $pId = $currentParent?->id;
+                        $subKey = ($pId ?? 'root') . '|' . mb_strtolower($childName);
+                        $catObj = $pId === null
+                            ? ($rootCatsByName[mb_strtolower($childName)] ?? null)
+                            : ($subCatsByParentAndName[$subKey] ?? null);
+
+                        if (!$catObj) {
+                            $preferredSlug = (count($chain) === 1 && isset($slugsList[$idx]) && $slugsList[$idx] !== '')
+                                ? $slugsList[$idx]
+                                : ($currentParent ? "{$currentParent->slug}-{$childName}" : $childName);
+                            $catObj = Category::create([
+                                'name'               => $childName,
+                                'slug'               => $preferredSlug,
+                                'parent_id'          => $pId,
+                                'external_image_url' => $firstImage,
+                                'is_active'          => true,
+                            ]);
+                            if ($pId === null) {
+                                $rootCatsByName[mb_strtolower($childName)] = $catObj;
+                            } else {
+                                $subCatsByParentAndName[$subKey] = $catObj;
+                            }
+                        }
+                        $currentParent = $catObj;
+                        $lastCat = $catObj;
+                    }
+                    if ($lastCat) {
+                        $catIds[] = $lastCat->id;
+                    }
+                }
+            }
+
+            // Resolve tags in memory
+            $tagIds = [];
+            $tagsRaw = trim((string) ($col($csvRow, 'tags_list') ?? ''));
+            if ($tagsRaw !== '') {
+                $tNames = array_values(array_unique(array_filter(array_map('trim', preg_split('/[,،|]+/u', $tagsRaw)))));
+                foreach ($tNames as $tName) {
+                    $tk = mb_strtolower($tName);
+                    if (!isset($tagsByKey[$tk])) {
+                        $tObj = Tag::create(['name' => $tName, 'is_active' => true]);
+                        $tagsByKey[$tk] = $tObj->id;
+                    }
+                    $tagIds[] = $tagsByKey[$tk];
+                }
+            }
+
+            if ($existingId !== null) {
+                $toUpdate[$existingId] = $rowPayload;
+                $relKey = 'id:' . $existingId;
+            } elseif ($skuVal !== null && isset($newSlugBySku[$skuVal])) {
+                // Multi-sheet file repeating a newly-added SKU on Sheet 2 (e.g. offers sheet): merge categories cleanly
+                $prevSlug = $newSlugBySku[$skuVal];
+                $relKey = 'slug:' . $prevSlug;
+            } else {
+                $rowPayload['created_at'] = $now;
+                $toInsert[$finalSlug] = $rowPayload;
+                $relKey = 'slug:' . $finalSlug;
+                if ($skuVal !== null) {
+                    $newSlugBySku[$skuVal] = $finalSlug;
+                }
+            }
+
+            $prevCats = $relationsByKey[$relKey]['cats'] ?? [];
+            $prevTags = $relationsByKey[$relKey]['tags'] ?? [];
+            $relationsByKey[$relKey] = [
+                'cats' => array_values(array_unique(array_merge($prevCats, $catIds))),
+                'tags' => array_values(array_unique(array_merge($prevTags, $tagIds))),
+            ];
+
+            $imported++;
+        }
+
+        // 2. Execute all DB writes in ONE fast transaction using bulk inserts
+        \Illuminate\Support\Facades\DB::transaction(function () use ($toInsert, $toUpdate, $relationsByKey): void {
+            if (!empty($toInsert)) {
+                foreach (array_chunk(array_values($toInsert), 250) as $chunk) {
+                    \Illuminate\Support\Facades\DB::table('products')->insert($chunk);
+                }
+            }
+
+            foreach ($toUpdate as $prodId => $payload) {
+                \Illuminate\Support\Facades\DB::table('products')->where('id', $prodId)->update($payload);
+            }
+
+            // Map newly inserted slugs back to their auto-increment IDs in 1 query
+            $insertedIdBySlug = [];
+            if (!empty($toInsert)) {
+                $slugs = array_keys($toInsert);
+                foreach (array_chunk($slugs, 500) as $slugChunk) {
+                    $rows = \Illuminate\Support\Facades\DB::table('products')
+                        ->whereIn('slug', $slugChunk)
+                        ->pluck('id', 'slug');
+                    foreach ($rows as $s => $id) {
+                        $insertedIdBySlug[$s] = (int) $id;
+                    }
+                }
+            }
+
+            $catPivots = [];
+            $tagPivots = [];
+            $updatedProductIds = array_keys($toUpdate);
+
+            foreach ($relationsByKey as $relKey => $rels) {
+                $productId = str_starts_with($relKey, 'id:')
+                    ? (int) substr($relKey, 3)
+                    : ($insertedIdBySlug[substr($relKey, 5)] ?? null);
+
+                if (!$productId) {
+                    continue;
+                }
+
+                foreach ($rels['cats'] as $cid) {
+                    $catPivots[] = ['product_id' => $productId, 'category_id' => $cid];
+                }
+                foreach ($rels['tags'] as $tid) {
+                    $tagPivots[] = ['product_id' => $productId, 'tag_id' => $tid];
+                }
+            }
+
+            if (!empty($updatedProductIds)) {
+                \Illuminate\Support\Facades\DB::table('product_category')->whereIn('product_id', $updatedProductIds)->delete();
+                \Illuminate\Support\Facades\DB::table('product_tag')->whereIn('product_id', $updatedProductIds)->delete();
+            }
+
+            if (!empty($catPivots)) {
+                foreach (array_chunk($catPivots, 500) as $chunk) {
+                    \Illuminate\Support\Facades\DB::table('product_category')->insertOrIgnore($chunk);
+                }
+            }
+
+            if (!empty($tagPivots)) {
+                foreach (array_chunk($tagPivots, 500) as $chunk) {
+                    \Illuminate\Support\Facades\DB::table('product_tag')->insertOrIgnore($chunk);
+                }
+            }
+        });
+
+        return ['imported' => $imported, 'skipped' => $skipped];
+    }
 }

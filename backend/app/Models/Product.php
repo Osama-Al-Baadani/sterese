@@ -111,6 +111,16 @@ class Product extends Model
                 $product->stock_status = $product->stock_status ?: 'instock';
             }
         });
+
+        static::saved(function () {
+            \Illuminate\Support\Facades\Cache::forget('products_list_stats_v1');
+            \Illuminate\Support\Facades\Cache::forget('nav_badge_products_count');
+        });
+
+        static::deleted(function () {
+            \Illuminate\Support\Facades\Cache::forget('products_list_stats_v1');
+            \Illuminate\Support\Facades\Cache::forget('nav_badge_products_count');
+        });
     }
 
     public static function uniqueSlug(string $raw, ?int $ignoreId = null): string

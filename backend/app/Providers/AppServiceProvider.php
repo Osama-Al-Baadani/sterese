@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Filament\Support\Facades\FilamentTimezone;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,5 +26,9 @@ class AppServiceProvider extends ServiceProvider
         // them to Riyadh local time, without touching what's actually saved
         // or how any date math elsewhere in the app works.
         FilamentTimezone::set('Asia/Riyadh');
+
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
     }
 }

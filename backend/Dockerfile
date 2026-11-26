@@ -38,8 +38,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY . .
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# Install PHP dependencies & publish Filament CSS/JS assets
+RUN composer install --no-dev --optimize-autoloader --no-interaction \
+    && php artisan filament:assets
 
 # Set permissions for Laravel storage & cache
 RUN chown -R www-data:www-data storage bootstrap/cache \

@@ -32,10 +32,10 @@ export default function HomeSectionProducts({ products }: { products: Product[] 
 
       <div
         ref={scrollerRef}
-        className="flex min-w-0 flex-1 gap-4 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex min-w-0 flex-1 gap-3 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {products.map((product) => (
-          <div key={product.id} className="w-40 shrink-0 sm:w-52">
+          <div key={product.id} className="w-36 shrink-0 sm:w-40 md:w-44">
             <ProductCard product={product} locale={locale} />
           </div>
         ))}

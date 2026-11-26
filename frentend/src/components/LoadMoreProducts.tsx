@@ -155,14 +155,9 @@ export default function LoadMoreProducts({
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 lg:grid-cols-6">
           {products.map((p) => (
-            <div
-              key={p.id}
-              className="w-[calc(50%-0.375rem)] sm:w-[calc(25%-0.75rem)] lg:w-[calc(20%-0.8rem)]"
-            >
-              <ProductCard product={p} locale={locale} />
-            </div>
+            <ProductCard key={p.id} product={p} locale={locale} />
           ))}
         </div>
       </div>

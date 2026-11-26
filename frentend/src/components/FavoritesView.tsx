@@ -49,11 +49,9 @@ export default function FavoritesView() {
   }
 
   return (
-    <div className="flex flex-wrap gap-4">
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 md:grid-cols-5 lg:grid-cols-6">
       {products.map((p) => (
-        <div key={p.id} className="w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.667rem)] lg:w-[calc(25%-0.75rem)]">
-          <ProductCard product={p} locale={locale} />
-        </div>
+        <ProductCard key={p.id} product={p} locale={locale} />
       ))}
     </div>
   );

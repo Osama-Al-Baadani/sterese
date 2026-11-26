@@ -10,10 +10,12 @@ export default function AddToCartButton({
   product,
   disabled = false,
   compact = false,
+  iconOnly = false,
 }: {
   product: Product;
   disabled?: boolean;
   compact?: boolean;
+  iconOnly?: boolean;
 }) {
   const tCommon = useTranslations("common");
   const { items, addItem, setQuantity, maxQtyFor } = useCart();
@@ -22,6 +24,19 @@ export default function AddToCartButton({
   const maxQty = maxQtyFor(product);
 
   if (disabled) {
+    if (iconOnly) {
+      return (
+        <button
+          type="button"
+          disabled
+          aria-label={tCommon("unavailable")}
+          title={tCommon("unavailable")}
+          className="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-xl bg-navy-900/10 text-navy-300"
+        >
+          <ShoppingCart className="h-4 w-4" aria-hidden />
+        </button>
+      );
+    }
     return (
       <button
         type="button"
@@ -41,6 +56,32 @@ export default function AddToCartButton({
   // stepper itself — it always reflects the real cart quantity rather than
   // a separate "how many to add" count that resets after adding.
   if (inCart) {
+    if (iconOnly) {
+      return (
+        <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-xl border border-brand-600 bg-brand-50 px-1 shadow-xs">
+          <button
+            type="button"
+            onClick={() => setQuantity(product.id, inCart.quantity - 1)}
+            className="flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100"
+            aria-label={tCommon("decreaseQty")}
+          >
+            <Minus className="h-3 w-3" aria-hidden />
+          </button>
+          <span className="min-w-[1.1rem] text-center text-xs font-bold text-navy-900">
+            {inCart.quantity}
+          </span>
+          <button
+            type="button"
+            onClick={() => setQuantity(product.id, inCart.quantity + 1)}
+            disabled={inCart.quantity >= maxQty}
+            className="flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100 disabled:opacity-40"
+            aria-label={tCommon("increaseQty")}
+          >
+            <Plus className="h-3 w-3" aria-hidden />
+          </button>
+        </div>
+      );
+    }
     return (
       <div
         className={
@@ -78,6 +119,23 @@ export default function AddToCartButton({
           <Plus className={compact ? "h-3 w-3" : "h-4 w-4"} aria-hidden />
         </button>
       </div>
+    );
+  }
+
+  if (iconOnly) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          addItem(product, 1);
+          showToast(tCommon("addedToCartToast"), "success");
+        }}
+        aria-label={tCommon("addToCart")}
+        title={tCommon("addToCart")}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-navy-900 text-white shadow-xs transition-all duration-200 active:scale-95 hover:bg-brand-600 hover:shadow-md hover:shadow-brand-600/20"
+      >
+        <ShoppingCart className="h-4 w-4" aria-hidden />
+      </button>
     );
   }
 

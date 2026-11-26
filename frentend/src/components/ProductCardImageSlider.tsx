@@ -43,7 +43,7 @@ export default function ProductCardImageSlider({
         alt={name}
         fill
         sizes="(min-width: 1024px) 20vw, 45vw"
-        className="object-cover transition-transform duration-500 group-hover:scale-105"
+        className="object-contain p-3 transition-transform duration-500 group-hover:scale-105"
       />
 
       {count > 1 && (
@@ -78,7 +78,7 @@ export default function ProductCardImageSlider({
                   setIndex(i);
                 }}
                 className={`h-1.5 rounded-full transition-all ${
-                  i === index ? "w-4 bg-brand-600 shadow-xs" : "w-1.5 bg-white/80 hover:bg-white"
+                  i === index ? "w-4 bg-brand-600 shadow-xs" : "w-1.5 bg-navy-900/20 hover:bg-navy-900/40"
                 }`}
               />
             ))}

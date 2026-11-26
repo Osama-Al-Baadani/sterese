@@ -35,7 +35,7 @@ export default function HomeSectionProducts({ products }: { products: Product[] 
         className="flex min-w-0 flex-1 gap-3 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {products.map((product) => (
-          <div key={product.id} className="w-36 shrink-0 sm:w-40 md:w-44">
+          <div key={product.id} className="w-40 shrink-0 sm:w-44 md:w-48">
             <ProductCard product={product} locale={locale} />
           </div>
         ))}

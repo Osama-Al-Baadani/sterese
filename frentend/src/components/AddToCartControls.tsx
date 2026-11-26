@@ -60,10 +60,12 @@ export default function AddToCartControls({
             showToast(tCommon("addedToCartToast"), "success");
           }}
           disabled={disabled}
+          aria-label={disabled ? tCommon("unavailable") : tCommon("addToCart")}
+          title={disabled ? tCommon("unavailable") : tCommon("addToCart")}
           className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition active:scale-[0.98] hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-navy-900/10 disabled:text-navy-300 disabled:shadow-none"
         >
-          <ShoppingCart className="h-5 w-5" aria-hidden />
-          {disabled ? tCommon("unavailable") : tCommon("addToCart")}
+          <ShoppingCart className="h-6 w-6" aria-hidden />
+          {disabled && <span>{tCommon("unavailable")}</span>}
         </button>
       )}
 

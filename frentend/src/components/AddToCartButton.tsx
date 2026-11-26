@@ -146,14 +146,15 @@ export default function AddToCartButton({
         addItem(product, 1);
         showToast(tCommon("addedToCartToast"), "success");
       }}
+      aria-label={tCommon("addToCart")}
+      title={tCommon("addToCart")}
       className={
         compact
-          ? "flex w-full items-center justify-center gap-1.5 rounded-xl bg-navy-900 py-2.5 text-xs font-extrabold text-white shadow-xs transition-all duration-200 active:scale-[0.97] hover:bg-brand-600 hover:shadow-md hover:shadow-brand-600/20"
-          : "flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition active:scale-[0.98] hover:bg-brand-700"
+          ? "flex w-full items-center justify-center rounded-xl bg-navy-900 py-2.5 text-white shadow-xs transition-all duration-200 active:scale-[0.97] hover:bg-brand-600 hover:shadow-md hover:shadow-brand-600/20"
+          : "flex w-full items-center justify-center rounded-full bg-brand-600 py-3.5 text-white shadow-lg shadow-brand-600/25 transition active:scale-[0.98] hover:bg-brand-700"
       }
     >
-      <ShoppingCart className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} aria-hidden />
-      {tCommon("addToCart")}
+      <ShoppingCart className={compact ? "h-4 w-4" : "h-6 w-6"} aria-hidden />
     </button>
   );
 }

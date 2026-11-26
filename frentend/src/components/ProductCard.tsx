@@ -41,7 +41,7 @@ export default function ProductCard({ product, locale }: { product: Product; loc
       {/* Image area */}
       <Link
         href={`/product/${product.id}`}
-        className="relative block aspect-square overflow-hidden bg-[#f7f8fa]"
+        className="relative block aspect-square overflow-hidden border-b border-navy-900/[0.05] bg-white"
       >
         <ProductCardImageSlider images={product.images} name={name} />
 
@@ -87,35 +87,35 @@ export default function ProductCard({ product, locale }: { product: Product; loc
       </Link>
 
       {/* Details area */}
-      <div className="flex flex-1 flex-col p-2.5">
+      <div className="flex flex-1 flex-col p-3">
         {brandOrCat && (
-          <span className="mb-0.5 truncate text-[10px] font-bold tracking-wide text-navy-400">
+          <span className="mb-0.5 truncate text-[10.5px] font-bold tracking-wide text-navy-400">
             {brandOrCat}
           </span>
         )}
 
         <Link
           href={`/product/${product.id}`}
-          className="line-clamp-2 min-h-[2.1rem] text-xs font-bold leading-snug text-navy-900 transition-colors group-hover:text-brand-700"
+          className="line-clamp-2 min-h-[2.3rem] text-[13px] font-bold leading-snug text-navy-900 transition-colors group-hover:text-brand-700"
         >
           {name}
         </Link>
 
         {/* Price + Icon-only Cart Button */}
-        <div className="mt-auto flex items-end justify-between gap-1.5 pt-2">
+        <div className="mt-auto flex items-end justify-between gap-2 pt-2.5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-1">
-              <span className="text-sm font-black tracking-tight text-navy-900">
+              <span className="text-[15px] font-black tracking-tight text-navy-900">
                 <SarPrice amount={product.price} />
               </span>
               {product.on_sale && (
-                <span className="text-[10px] font-medium text-navy-300 line-through">
+                <span className="text-[11px] font-medium text-navy-300 line-through">
                   <SarPrice amount={product.regular_price} />
                 </span>
               )}
             </div>
             {savings > 0 && (
-              <p className="mt-0.5 truncate text-[10px] font-bold text-emerald-600">
+              <p className="mt-0.5 truncate text-[10.5px] font-bold text-emerald-600">
                 {locale === "ar" ? `وفر ${savings} ر.س` : `Save ${savings} SAR`}
               </p>
             )}

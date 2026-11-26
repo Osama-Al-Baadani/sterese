@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useLocale } from "next-intl";
-import { Bot, ExternalLink, Loader2, MessageCircle, PackageX, Send, Sparkles, X } from "lucide-react";
+import { Bot, ExternalLink, Loader2, PackageX, Send, Sparkles, X } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import SarPrice from "./SarPrice";
 
@@ -95,11 +95,11 @@ export default function AiAdvisorChat() {
 
   return (
     <div
-      className="fixed bottom-[calc(76px+env(safe-area-inset-bottom,0px))] left-4 z-50 md:bottom-6 md:left-6"
+      className="fixed bottom-[calc(76px+env(safe-area-inset-bottom,0px))] start-3.5 z-50 md:bottom-6 md:start-6"
       dir={isAr ? "rtl" : "ltr"}
     >
       {isOpen && (
-        <div className="mb-3 flex h-[470px] w-[calc(100vw-2rem)] max-w-[380px] flex-col overflow-hidden rounded-3xl border border-navy-900/10 bg-white shadow-2xl shadow-navy-900/20">
+        <div className="mb-3 flex h-[470px] max-h-[calc(100dvh-160px)] w-[calc(100vw-1.75rem)] max-w-[380px] flex-col overflow-hidden rounded-3xl border border-navy-900/10 bg-white shadow-2xl shadow-navy-900/20">
           {/* Header */}
           <div className="flex items-center justify-between bg-gradient-to-l from-navy-900 to-navy-700 px-4 py-3.5 text-white">
             <div className="flex items-center gap-2.5">
@@ -234,14 +234,14 @@ export default function AiAdvisorChat() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex items-center gap-2.5 rounded-full bg-gradient-to-l from-navy-900 to-navy-700 py-2 ps-2.5 pe-4 text-white shadow-lg shadow-navy-900/25 ring-1 ring-brand-500/60 transition-all duration-200 hover:scale-[1.03] hover:ring-brand-500"
+        className="group flex items-center gap-2 rounded-full bg-gradient-to-l from-navy-900 to-navy-700 py-1.5 ps-1.5 pe-3 text-white shadow-xl shadow-navy-900/30 ring-2 ring-brand-500/80 transition-all duration-200 hover:scale-[1.03] hover:ring-brand-500 md:gap-2.5 md:py-2 md:ps-2.5 md:pe-4"
         aria-label={isAr ? "فتح المستشار الذكي" : "Open Smart Advisor"}
       >
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-navy-900 shadow-xs">
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-navy-900 shadow-xs md:h-10 md:w-10">
           {isOpen ? (
             <X className="h-4.5 w-4.5" aria-hidden />
           ) : (
-            <Bot className="h-4.5 w-4.5" aria-hidden />
+            <Bot className="h-5 w-5" aria-hidden />
           )}
           {!isOpen && (
             <span className="absolute -top-0.5 -end-0.5 flex h-2.5 w-2.5">
@@ -253,11 +253,11 @@ export default function AiAdvisorChat() {
 
         {!isOpen && (
           <span className="flex flex-col items-start text-start leading-tight">
-            <span className="flex items-center gap-1 text-xs font-extrabold text-white">
+            <span className="flex items-center gap-1 text-xs font-extrabold text-white md:text-[13px]">
               {isAr ? "المستشار الذكي" : "Smart Advisor"}
               <Sparkles className="h-3 w-3 text-brand-500" aria-hidden />
             </span>
-            <span className="text-[10px] font-medium text-white/75">
+            <span className="hidden text-[10px] font-medium text-white/80 sm:block">
               {isAr ? "اسألني عن أي منتج أو سعر" : "Ask about products & prices"}
             </span>
           </span>

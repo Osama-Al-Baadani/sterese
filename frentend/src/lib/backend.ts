@@ -24,7 +24,11 @@ export class BackendError extends Error {
   status: number;
   body: unknown;
   constructor(status: number, body: unknown) {
-    super(typeof body === "object" && body && "message" in body ? String((body as { message: unknown }).message) : `Backend error ${status}`);
+    super(
+      typeof body === "object" && body && "message" in body
+        ? String((body as { message: unknown }).message)
+        : `Backend error ${status}`
+    );
     this.status = status;
     this.body = body;
   }
@@ -64,16 +68,7 @@ export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promi
     method: opts.method ?? "GET",
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    ...(opts.revalidate === false
-      ? { cache: "no-store" as const }
-      // 5 min, not 60s — bumped 2026-10-26 under real crawl + launch-day load.
-      // Only ever reaches public, non-personal data: every customer-specific
-      // call (orders, addresses, profile, OTP, coupon check) already passes
-      // revalidate: false explicitly and is unaffected. A price/stock edit in
-      // the admin can take up to 5 min to show on the storefront now — the
-      // real checkout total is always recomputed server-side regardless, so
-      // this is a display-staleness tradeoff only, never a money one.
-      : { next: { revalidate: opts.revalidate ?? 60 } }),
+    cache: "no-store",
   });
 
   const text = await res.text();

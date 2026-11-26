@@ -8,7 +8,6 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -20,12 +19,12 @@ class ApiKeyResource extends Resource
 {
     protected static ?string $model = ApiKey::class;
 
-    protected static string|\BackedEnum|null $navigationIcon   = 'heroicon-o-key';
-    protected static ?string                 $navigationLabel  = 'مفاتيح الربط (API v2)';
-    protected static \UnitEnum|string|null   $navigationGroup  = 'الإعدادات والنظام';
-    protected static ?int                    $navigationSort   = 11;
-    protected static ?string                 $modelLabel       = 'مفتاح API';
-    protected static ?string                 $pluralModelLabel = 'مفاتيح الربط (API v2)';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-key';
+    protected static ?string $navigationLabel = 'مفاتيح الربط (API v2)';
+    protected static \UnitEnum|string|null $navigationGroup = 'الإعدادات والنظام';
+    protected static ?int $navigationSort = 11;
+    protected static ?string $modelLabel = 'مفتاح API';
+    protected static ?string $pluralModelLabel = 'مفاتيح الربط (API v2)';
 
     public static function form(Schema $form): Schema
     {
@@ -81,14 +80,16 @@ class ApiKeyResource extends Resource
                     ->requiresConfirmation()
                     ->modalHeading('توليد Secret جديد؟')
                     ->modalDescription('سيتم إبطال الـ Secret القديم فوراً، ويجب تحديثه في ملف البيئة (.env) للجهة المرتبطة.')
-                    ->action(function (ApiKey $record) {
+                    ->action(function (ApiKey $record, $livewire) {
                         $secret = $record->regenerateSecret();
-                        Notification::make()
-                            ->title('تم توليد Secret جديد — انسخه الآن (يظهر مرة واحدة فقط)')
-                            ->body("V2_API_KEY={$record->key}\nV2_API_SECRET={$secret}")
-                            ->success()
-                            ->persistent()
-                            ->send();
+
+                        $livewire->js('window.prompt("انسخ الـ V2_API_SECRET الجديد الآن (Ctrl+C):", ' . json_encode($secret) . ')');
+
+                        $livewire->replaceMountedAction('showCredentials', [
+                            'heading' => 'تم توليد Secret جديد بنجاح',
+                            'key'     => $record->key,
+                            'secret'  => $secret,
+                        ]);
                     }),
                 DeleteAction::make()->label('حذف'),
             ]);

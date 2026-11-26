@@ -6,12 +6,26 @@ use App\Filament\Resources\ApiKeyResource;
 use App\Models\ApiKey;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 
 class ListApiKeys extends ListRecords
 {
     protected static string $resource = ApiKeyResource::class;
+
+    public function showCredentialsAction(): Action
+    {
+        return Action::make('showCredentials')
+            ->modalHeading(fn (array $arguments): string => $arguments['heading'] ?? 'بيانات مفتاح الـ API')
+            ->modalIcon('heroicon-o-key')
+            ->modalIconColor('success')
+            ->modalWidth('lg')
+            ->modalContent(fn (array $arguments) => view('filament.api-key-credentials', [
+                'key'    => $arguments['key'] ?? '',
+                'secret' => $arguments['secret'] ?? '',
+            ]))
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('تم، أغلق النافذة');
+    }
 
     protected function getHeaderActions(): array
     {
@@ -28,16 +42,15 @@ class ListApiKeys extends ListRecords
                 ])
                 ->action(function (array $data) {
                     $apiKey = ApiKey::create([
-                        'label'     => $data['label'],
+                        'label' => $data['label'],
                         'is_active' => true,
                     ]);
 
-                    Notification::make()
-                        ->title('تم إنشاء مفتاح الـ API — انسخ البيانات الآن (الـ Secret يظهر مرة واحدة فقط!)')
-                        ->body("V2_API_KEY={$apiKey->key}\nV2_API_SECRET={$apiKey->plainSecret}")
-                        ->success()
-                        ->persistent()
-                        ->send();
+                    $this->replaceMountedAction('showCredentials', [
+                        'heading' => 'تم إنشاء مفتاح الـ API بنجاح',
+                        'key'     => $apiKey->key,
+                        'secret'  => $apiKey->plainSecret,
+                    ]);
                 }),
         ];
     }

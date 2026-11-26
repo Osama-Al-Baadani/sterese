@@ -136,38 +136,47 @@ export default function TrackOrderView() {
               <p className="text-sm font-bold">{tOrders("status.cancelled")}</p>
             </div>
           ) : (
-            <div className="mt-6 grid grid-cols-5 gap-2">
-              {STEPS.map((step, idx) => {
-                const done = idx <= activeStep;
-                const Icon =
-                  step === "pending"
-                    ? Clock
-                    : step === "preparing"
-                      ? Package
-                      : step === "shipped"
-                        ? Truck
-                        : CheckCircle2;
-                return (
-                  <div key={step} className="flex flex-col items-center text-center">
-                    <span
-                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition ${
-                        done
-                          ? "border-brand-600 bg-brand-600 text-white"
-                          : "border-navy-900/10 bg-navy-900/[0.03] text-navy-300"
-                      }`}
-                    >
-                      <Icon className="h-4.5 w-4.5" aria-hidden />
-                    </span>
-                    <span
-                      className={`mt-2 text-[11px] font-bold leading-tight ${
-                        done ? "text-navy-900" : "text-navy-400"
-                      }`}
-                    >
-                      {t(`step.${step}`)}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="relative mt-8">
+              <div className="absolute top-5 right-[10%] left-[10%] h-1 rounded-full bg-navy-900/10" aria-hidden>
+                <div
+                  className="h-full rounded-full bg-brand-600 transition-all duration-500"
+                  style={{ width: `${(activeStep / (STEPS.length - 1)) * 100}%` }}
+                />
+              </div>
+              <div className="relative grid grid-cols-5 gap-2">
+                {STEPS.map((step, idx) => {
+                  const done = idx <= activeStep;
+                  const isCurrent = idx === activeStep;
+                  const Icon =
+                    step === "pending"
+                      ? Clock
+                      : step === "preparing"
+                        ? Package
+                        : step === "shipped"
+                          ? Truck
+                          : CheckCircle2;
+                  return (
+                    <div key={step} className="flex flex-col items-center text-center">
+                      <span
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                          done
+                            ? "border-brand-600 bg-brand-600 text-white shadow-md shadow-brand-600/25"
+                            : "border-navy-900/10 bg-white text-navy-300"
+                        } ${isCurrent ? "ring-4 ring-brand-500/25 scale-110" : ""}`}
+                      >
+                        <Icon className="h-4.5 w-4.5" aria-hidden />
+                      </span>
+                      <span
+                        className={`mt-2.5 text-[11px] font-bold leading-tight ${
+                          done ? "text-navy-900" : "text-navy-400"
+                        }`}
+                      >
+                        {t(`step.${step}`)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

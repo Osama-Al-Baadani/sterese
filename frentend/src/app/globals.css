@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f8fafc;
   --foreground: #1a2742;
 
   /* Brand — matches the app's actual identity: gold (AppColors.primary) is

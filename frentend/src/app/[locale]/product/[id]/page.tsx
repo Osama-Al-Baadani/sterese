@@ -12,6 +12,7 @@ import ProductGallery from "@/components/ProductGallery";
 import ProductVariationsBox from "@/components/ProductVariationsBox";
 import RecentlyViewedSection from "@/components/RecentlyViewedSection";
 import ShareButton from "@/components/ShareButton";
+import StickyMobileProductBar from "@/components/StickyMobileProductBar";
 import TrackProductView from "@/components/TrackProductView";
 import { bundleLabel, safeJsonLd, stripHtml } from "@/lib/format";
 import { localizedAlternates, localizedDescription, localizedName } from "@/lib/i18n-helpers";
@@ -200,6 +201,7 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
         <RecentlyViewedSection excludeId={product.id} />
       </main>
       <TrackProductView productId={product.id} />
+      <StickyMobileProductBar product={product} outOfStock={outOfStock} />
       <Footer settings={config.storeSettings} />
 
       <script

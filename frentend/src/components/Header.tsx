@@ -34,8 +34,8 @@ export default async function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 shadow-sm">
-        <div className="border-b border-black/10 bg-brand-500">
+      <header className="sticky top-0 z-40 shadow-md shadow-navy-900/5">
+        <div className="border-b border-black/10 bg-brand-500/95 backdrop-blur-md">
           <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
             {/* Localized store brand name for logo alt and title */}
             <Link href="/" className="flex shrink-0 items-center gap-2">

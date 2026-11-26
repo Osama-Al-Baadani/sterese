@@ -46,7 +46,7 @@ export default function SearchBar({ keywords = [] }: { keywords?: string[] }) {
     setRecent(loadRecentSearches());
   }, []);
 
-  // Fast keyword suggestions from product names (text-only chips, no heavy dropdown)
+  // Fast keyword suggestions from product names (text-only chips)
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < 2) {

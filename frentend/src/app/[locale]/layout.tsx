@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
+import AiAdvisorChat from "@/components/AiAdvisorChat";
 import CartDrawer from "@/components/CartDrawer";
 import ErrorLogger from "@/components/ErrorLogger";
 import { FavoritesProvider } from "@/lib/favorites-context";
@@ -162,6 +163,7 @@ export default async function LocaleLayout({
                 <FavoritesProvider>
                   {children}
                   <CartDrawer />
+                  <AiAdvisorChat />
                 </FavoritesProvider>
               </CartProvider>
             </AuthProvider>

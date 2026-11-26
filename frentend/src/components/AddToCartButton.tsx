@@ -45,7 +45,7 @@ export default function AddToCartButton({
       <div
         className={
           compact
-            ? "flex w-full items-center justify-between rounded-xl border border-brand-600 bg-brand-50 px-1 py-1"
+            ? "flex w-full items-center justify-between rounded-full border border-brand-600 bg-brand-50 px-1.5 py-1 shadow-xs"
             : "flex w-full items-center justify-between rounded-full border border-brand-600 bg-brand-50 px-2 py-1.5"
         }
       >
@@ -90,7 +90,7 @@ export default function AddToCartButton({
       }}
       className={
         compact
-          ? "flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2 text-xs font-bold text-white transition active:scale-[0.98] hover:bg-brand-700"
+          ? "flex w-full items-center justify-center gap-1.5 rounded-full bg-brand-600 py-2.5 text-xs font-extrabold text-white shadow-sm shadow-brand-600/20 transition-all active:scale-[0.97] hover:bg-brand-700 hover:shadow-md"
           : "flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition active:scale-[0.98] hover:bg-brand-700"
       }
     >

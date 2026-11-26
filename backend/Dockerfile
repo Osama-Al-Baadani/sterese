@@ -45,5 +45,5 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# Render injects $PORT at runtime (default 10000); configure Apache to listen on it
-CMD ["sh", "-c", "sed -i \"s/80/${PORT:-10000}/g\" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && php artisan storage:link || true && apache2-foreground"]
+# Render injects $PORT at runtime (default 10000); configure Apache, run migrations & start server
+CMD ["sh", "-c", "sed -i \"s/80/${PORT:-10000}/g\" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && php artisan migrate --force && (php artisan storage:link || true) && apache2-foreground"]

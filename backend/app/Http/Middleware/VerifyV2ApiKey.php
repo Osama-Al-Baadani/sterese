@@ -14,9 +14,15 @@ class VerifyV2ApiKey
         $key = $request->getUser();
         $secret = $request->getPassword();
 
-        // Fallback parser in case PHP-FPM/CGI stripped PHP_AUTH_USER/PW from Authorization header
-        if ((!$key || !$secret) && str_starts_with((string) $request->header('Authorization'), 'Basic ')) {
-            $decoded = base64_decode(substr((string) $request->header('Authorization'), 6), true);
+        // Fallback parser in case Apache/PHP-FPM placed Authorization in REDIRECT_HTTP_AUTHORIZATION
+        $authHeader = (string) (
+            $request->header('Authorization')
+            ?: $request->server('HTTP_AUTHORIZATION')
+            ?: $request->server('REDIRECT_HTTP_AUTHORIZATION')
+            ?: ''
+        );
+        if ((!$key || !$secret) && str_starts_with($authHeader, 'Basic ')) {
+            $decoded = base64_decode(substr($authHeader, 6), true);
             if ($decoded !== false && str_contains($decoded, ':')) {
                 [$key, $secret] = explode(':', $decoded, 2);
             }

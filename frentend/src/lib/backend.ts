@@ -4,9 +4,9 @@
  * up in the browser bundle. Client code goes through this site's own
  * /api/* route handlers instead, which call these helpers server-side.
  */
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8001";
-const V2_API_KEY = process.env.V2_API_KEY ?? "";
-const V2_API_SECRET = process.env.V2_API_SECRET ?? "";
+const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:8001").trim().replace(/\/+$/, "");
+const V2_API_KEY = (process.env.V2_API_KEY ?? "").trim();
+const V2_API_SECRET = (process.env.V2_API_SECRET ?? "").trim();
 
 const v2AuthHeader =
   V2_API_KEY && V2_API_SECRET
@@ -73,7 +73,7 @@ export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promi
       // the admin can take up to 5 min to show on the storefront now — the
       // real checkout total is always recomputed server-side regardless, so
       // this is a display-staleness tradeoff only, never a money one.
-      : { next: { revalidate: opts.revalidate ?? 300 } }),
+      : { next: { revalidate: opts.revalidate ?? 60 } }),
   });
 
   const text = await res.text();

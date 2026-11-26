@@ -24,11 +24,12 @@ RUN apt-get update && apt-get install -y \
         gd \
         zip \
         intl \
+        opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Enable Apache mod_rewrite, tune PHP limits for large Excel imports, and set DocumentRoot to Laravel's /public
+# Enable Apache mod_rewrite, PHP OPcache, and tune PHP limits for fast Filament & large imports
 RUN a2enmod rewrite \
-    && printf "max_execution_time=300\nmemory_limit=512M\nupload_max_filesize=32M\npost_max_size=32M\n" > /usr/local/etc/php/conf.d/imports.ini
+    && printf "max_execution_time=300\nmemory_limit=512M\nupload_max_filesize=32M\npost_max_size=32M\nopcache.enable=1\nopcache.memory_consumption=128\nopcache.interned_strings_buffer=16\nopcache.max_accelerated_files=10000\nopcache.validate_timestamps=0\n" > /usr/local/etc/php/conf.d/performance.ini
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
     && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
@@ -47,5 +48,5 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction \
 RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# Render injects $PORT at runtime (default 10000); configure Apache, run migrations, seed default admin, start background queue worker & Apache
-CMD ["sh", "-c", "sed -i \"s/80/${PORT:-10000}/g\" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && php artisan migrate --force && php -r \"require 'vendor/autoload.php'; \\$app = require_once 'bootstrap/app.php'; \\$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); App\\Models\\User::firstOrCreate(['email' => getenv('ADMIN_EMAIL') ?: 'admin@storeseco.com'], ['name' => 'Admin', 'password' => getenv('ADMIN_PASSWORD') ?: 'Admin@123456']);\" && (php artisan storage:link || true) && (php artisan queue:work --sleep=2 --tries=3 --timeout=300 &) && apache2-foreground"]
+# Render injects $PORT at runtime (default 10000); configure Apache, cache Laravel config/routes/views, run migrations, seed default admin, start background queue worker & Apache
+CMD ["sh", "-c", "sed -i \"s/80/${PORT:-10000}/g\" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && php -r \"require 'vendor/autoload.php'; \\$app = require_once 'bootstrap/app.php'; \\$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); App\\Models\\User::firstOrCreate(['email' => getenv('ADMIN_EMAIL') ?: 'admin@storeseco.com'], ['name' => 'Admin', 'password' => getenv('ADMIN_PASSWORD') ?: 'Admin@123456']);\" && (php artisan storage:link || true) && (php artisan queue:work --sleep=2 --tries=3 --timeout=300 &) && apache2-foreground"]

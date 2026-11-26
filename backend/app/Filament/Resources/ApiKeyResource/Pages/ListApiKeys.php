@@ -32,6 +32,10 @@ class ListApiKeys extends ListRecords
                         'is_active' => true,
                     ]);
 
+                    if ($apiKey->plainSecret) {
+                        \Illuminate\Support\Facades\Cache::put('apikey_plain_secret_' . $apiKey->id, $apiKey->plainSecret, now()->addMinutes(10));
+                    }
+
                     Notification::make()
                         ->title('تم إنشاء مفتاح الـ API — انسخ البيانات الآن (الـ Secret يظهر مرة واحدة فقط!)')
                         ->body("V2_API_KEY={$apiKey->key}\nV2_API_SECRET={$apiKey->plainSecret}")

@@ -1,4 +1,6 @@
 import { getTranslations } from "next-intl/server";
+import { LayoutGrid } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import CategoryGridRow from "./CategoryGridRow";
 
 export interface DeptItem {
@@ -14,13 +16,25 @@ export default async function CategoryGrid({ items }: { items: DeptItem[] }) {
   const t = await getTranslations("home");
 
   return (
-    <section className="bg-brand-50/40 py-6 sm:py-14">
+    <section className="relative overflow-hidden bg-gradient-to-b from-brand-50/55 via-brand-50/20 to-white py-8 sm:py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-4 text-center sm:mb-8">
-          <h2 className="text-xl font-extrabold text-navy-900 sm:text-3xl">
-            {t("shopByDepartment")}
-          </h2>
-          <p className="mt-1.5 text-sm text-navy-500 sm:mt-2 sm:text-base">{t("everythingInOnePlace")}</p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8">
+          <div>
+            <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-100/80 px-3 py-1 text-[11px] font-extrabold text-brand-700">
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+              {t("everythingInOnePlace")}
+            </span>
+            <h2 className="text-xl font-black tracking-tight text-navy-900 sm:text-2xl lg:text-3xl">
+              {t("shopByDepartment")}
+            </h2>
+          </div>
+
+          <Link
+            href="/browse"
+            className="inline-flex items-center gap-1 rounded-full border border-navy-900/10 bg-white px-4 py-1.5 text-xs font-extrabold text-navy-800 shadow-xs transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 sm:text-sm"
+          >
+            {t("seeAll")}
+          </Link>
         </div>
 
         <CategoryGridRow items={items} />

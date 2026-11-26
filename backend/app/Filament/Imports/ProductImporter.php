@@ -131,6 +131,15 @@ class ProductImporter extends Importer
     private static array $touchedProductIds = [];
 
     /**
+     * In-memory lookup caches across rows in the same import process — avoids
+     * hitting remote TiDB/MySQL repeatedly for the same brand/category/tag.
+     */
+    private static array $brandCache = [];
+    private static array $rootCategoryCache = [];
+    private static array $subCategoryCache = [];
+    private static array $tagCache = [];
+
+    /**
      * Detects a suggested main root category name from the uploaded filename or category slugs.
      *
      * @param  array<int, array<string, mixed>>  $sampleRows
@@ -627,6 +636,11 @@ class ProductImporter extends Importer
 
     private function resolveOrCreateBrand(string $rawBrand): BrandSetting
     {
+        $cacheKey = mb_strtolower(trim($rawBrand));
+        if (isset(self::$brandCache[$cacheKey])) {
+            return self::$brandCache[$cacheKey];
+        }
+
         $upper = strtoupper(trim($rawBrand));
         $slugCandidate = mb_strtolower((string) preg_replace('/[^\p{Arabic}a-z0-9]+/iu', '-', $rawBrand));
         $slugCandidate = trim($slugCandidate, '-');
@@ -645,7 +659,7 @@ class ProductImporter extends Importer
             ->first();
 
         if (!$brand) {
-            return BrandSetting::create([
+            return self::$brandCache[$cacheKey] = BrandSetting::create([
                 'name'      => $arabicName,
                 'name_en'   => $englishName,
                 'slug'      => $slugCandidate ?: null,
@@ -664,7 +678,7 @@ class ProductImporter extends Importer
             $brand->update($updates);
         }
 
-        return $brand;
+        return self::$brandCache[$cacheKey] = $brand;
     }
 
     protected function beforeSave(): void
@@ -768,7 +782,11 @@ class ProductImporter extends Importer
         // 2. Selected existing root category in import modal options
         $optParentId = (int) ($this->options['parent_category_id'] ?? 0);
         if ($optParentId > 0) {
-            $existing = Category::find($optParentId);
+            $idCacheKey = 'id:' . $optParentId;
+            if (!array_key_exists($idCacheKey, self::$rootCategoryCache)) {
+                self::$rootCategoryCache[$idCacheKey] = Category::find($optParentId);
+            }
+            $existing = self::$rootCategoryCache[$idCacheKey];
             if ($existing) {
                 if (empty($existing->image_path) && empty($existing->external_image_url) && $firstImage) {
                     $existing->update(['external_image_url' => $firstImage]);
@@ -798,6 +816,11 @@ class ProductImporter extends Importer
 
     private function findOrCreateRootCategory(string $name, ?string $firstImage): Category
     {
+        $cacheKey = 'name:' . mb_strtolower($name);
+        if (isset(self::$rootCategoryCache[$cacheKey])) {
+            return self::$rootCategoryCache[$cacheKey];
+        }
+
         $cat = Category::query()
             ->whereNull('parent_id')
             ->where(fn ($q) => $q->where('name', $name)->orWhere('slug', $name))
@@ -814,7 +837,7 @@ class ProductImporter extends Importer
             $cat->update(['external_image_url' => $firstImage]);
         }
 
-        return $cat;
+        return self::$rootCategoryCache[$cacheKey] = $cat;
     }
 
     private function inferFallbackSubcategoryName(string $productName): string
@@ -878,40 +901,47 @@ class ProductImporter extends Importer
                     }
 
                     $parentId = $currentParent?->id;
+                    $subCacheKey = ($parentId ?? 'root') . '|' . mb_strtolower($childName);
 
-                    $cat = Category::query()
-                        ->where('name', $childName)
-                        ->where('parent_id', $parentId)
-                        ->first();
-
-                    // Adopt a previously imported flat root category (if it has no children) under $parentId to prevent duplicates
-                    if (!$cat && $parentId !== null) {
-                        $orphan = Category::query()
+                    if (isset(self::$subCategoryCache[$subCacheKey])) {
+                        $cat = self::$subCategoryCache[$subCacheKey];
+                    } else {
+                        $cat = Category::query()
                             ->where('name', $childName)
-                            ->whereNull('parent_id')
-                            ->where('id', '!=', $parentId)
-                            ->doesntHave('children')
+                            ->where('parent_id', $parentId)
                             ->first();
-                        if ($orphan) {
-                            $orphan->update(['parent_id' => $parentId]);
-                            $cat = $orphan;
+
+                        // Adopt a previously imported flat root category (if it has no children) under $parentId to prevent duplicates
+                        if (!$cat && $parentId !== null) {
+                            $orphan = Category::query()
+                                ->where('name', $childName)
+                                ->whereNull('parent_id')
+                                ->where('id', '!=', $parentId)
+                                ->doesntHave('children')
+                                ->first();
+                            if ($orphan) {
+                                $orphan->update(['parent_id' => $parentId]);
+                                $cat = $orphan;
+                            }
                         }
-                    }
 
-                    if (!$cat) {
-                        $preferredSlug = (count($chain) === 1 && isset($slugsList[$idx]) && $slugsList[$idx] !== '')
-                            ? $slugsList[$idx]
-                            : ($currentParent ? "{$currentParent->slug}-{$childName}" : $childName);
+                        if (!$cat) {
+                            $preferredSlug = (count($chain) === 1 && isset($slugsList[$idx]) && $slugsList[$idx] !== '')
+                                ? $slugsList[$idx]
+                                : ($currentParent ? "{$currentParent->slug}-{$childName}" : $childName);
 
-                        $cat = Category::create([
-                            'name'               => $childName,
-                            'slug'               => $preferredSlug,
-                            'parent_id'          => $parentId,
-                            'external_image_url' => $firstImage,
-                            'is_active'          => true,
-                        ]);
-                    } elseif (empty($cat->image_path) && empty($cat->external_image_url) && $firstImage) {
-                        $cat->update(['external_image_url' => $firstImage]);
+                            $cat = Category::create([
+                                'name'               => $childName,
+                                'slug'               => $preferredSlug,
+                                'parent_id'          => $parentId,
+                                'external_image_url' => $firstImage,
+                                'is_active'          => true,
+                            ]);
+                        } elseif (empty($cat->image_path) && empty($cat->external_image_url) && $firstImage) {
+                            $cat->update(['external_image_url' => $firstImage]);
+                        }
+
+                        self::$subCategoryCache[$subCacheKey] = $cat;
                     }
 
                     $currentParent = $cat;
@@ -940,14 +970,18 @@ class ProductImporter extends Importer
             $names = array_values(array_unique(array_filter(array_map('trim', preg_split('/[,،|]+/u', $tagsRaw)))));
             $tagIds = [];
             foreach ($names as $tagName) {
-                $tag = Tag::where('name', $tagName)->orWhere('slug', $tagName)->first();
-                if (!$tag) {
-                    $tag = Tag::create([
-                        'name'      => $tagName,
-                        'is_active' => true,
-                    ]);
+                $tagKey = mb_strtolower($tagName);
+                if (!isset(self::$tagCache[$tagKey])) {
+                    $tag = Tag::where('name', $tagName)->orWhere('slug', $tagName)->first();
+                    if (!$tag) {
+                        $tag = Tag::create([
+                            'name'      => $tagName,
+                            'is_active' => true,
+                        ]);
+                    }
+                    self::$tagCache[$tagKey] = $tag->id;
                 }
-                $tagIds[] = $tag->id;
+                $tagIds[] = self::$tagCache[$tagKey];
             }
             if (!empty($tagIds)) {
                 $this->record->tags()->sync($tagIds);

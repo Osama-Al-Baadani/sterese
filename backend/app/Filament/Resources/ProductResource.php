@@ -63,7 +63,11 @@ class ProductResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        return (string) static::getModel()::count();
+        return (string) \Illuminate\Support\Facades\Cache::remember(
+            'nav_badge_products_count',
+            60,
+            fn () => static::getModel()::count(),
+        );
     }
 
     public static function getEloquentQuery(): Builder

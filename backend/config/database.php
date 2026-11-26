@@ -60,8 +60,9 @@ return [
             'strict' => false,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
+                \PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', true),
                 (defined('Pdo\\Mysql::ATTR_SSL_CA') ? constant('Pdo\\Mysql::ATTR_SSL_CA') : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            ], fn ($v) => $v !== null && $v !== '') : [],
         ],
 
         // The WooCommerce/WordPress MySQL database — a completely separate
@@ -101,8 +102,9 @@ return [
             'strict' => false,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
+                \PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', true),
                 (defined('Pdo\\Mysql::ATTR_SSL_CA') ? constant('Pdo\\Mysql::ATTR_SSL_CA') : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            ], fn ($v) => $v !== null && $v !== '') : [],
         ],
 
         'pgsql' => [

@@ -74,6 +74,9 @@ export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promi
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
 
-  if (!res.ok) throw new BackendError(res.status, data);
+  if (!res.ok) {
+    console.error("BACKEND_FAIL:", res.status, buildUrl(path, opts.query), text.slice(0, 300));
+    throw new BackendError(res.status, data);
+  }
   return data as T;
 }

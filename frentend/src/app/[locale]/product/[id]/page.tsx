@@ -62,8 +62,10 @@ export async function generateMetadata({
  * worth much on a growing catalog. */
 async function getRelatedProducts(product: Product): Promise<Product[]> {
   if (product.related_product_ids.length > 0) {
-    const all = await getProducts({ perPage: product.related_product_ids.length + 5 });
-    const picked = all.filter((p) => product.related_product_ids.includes(p.id));
+    const picked = await getProducts({
+      include: product.related_product_ids.join(","),
+      perPage: product.related_product_ids.length,
+    });
     if (picked.length > 0) return picked;
   }
   if (product.categories.length === 0) return [];
@@ -90,6 +92,16 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
   const bundle = bundleLabel(product.bundle_qty);
   const name = localizedName(product, locale);
   const brandName = product.brands[0] ? localizedName(product.brands[0], locale) : null;
+  const shortDesc = stripHtml(
+    locale === "en"
+      ? product.short_description_en || product.short_description
+      : product.short_description || product.short_description_en,
+  );
+  const fullDesc = stripHtml(
+    locale === "en"
+      ? product.description_en || product.description
+      : product.description || product.description_en,
+  );
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -174,17 +186,17 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
                 </div>
               )}
 
-              {product.short_description && (
+              {shortDesc && (
                 <p className="mt-4 leading-7 text-navy-700">
-                  {stripHtml((locale === "en" && product.short_description_en) || product.short_description)}
+                  {shortDesc}
                 </p>
               )}
 
-              {product.description && (
+              {fullDesc && (
                 <div className="mt-10 border-t border-navy-900/10 pt-6">
                   <h2 className="mb-3 text-lg font-bold text-navy-900">{t("details")}</h2>
                   <div className="leading-7 whitespace-pre-line text-navy-700">
-                    {stripHtml((locale === "en" && product.description_en) || product.description)}
+                    {fullDesc}
                   </div>
                 </div>
               )}

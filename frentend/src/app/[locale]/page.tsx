@@ -39,10 +39,23 @@ export default async function Home() {
   const { webCarouselBanners, gridTileBanners, gridStackBanners, promoCards, promoBottomCards, storeSettings } = config;
 
   let sectionsWithProducts = await Promise.all(
-    homeSections.map(async (section) => ({
-      section,
-      products: await getHomeSectionProducts(section, categories),
-    })),
+    homeSections.map(async (section) => {
+      let localizedTitle = section.title;
+      if (locale === "en" && /[\u0600-\u06FF]/.test(section.title)) {
+        if (section.source_type === "category" && section.source_ids[0]) {
+          const matchedCat = categories.find((c) => c.id === section.source_ids[0]);
+          if (matchedCat) localizedTitle = localizedName(matchedCat, locale);
+        } else if (section.source_type === "bestsellers") {
+          localizedTitle = "Best Sellers";
+        } else if (section.source_type === "featured") {
+          localizedTitle = "Featured Products";
+        }
+      }
+      return {
+        section: localizedTitle !== section.title ? { ...section, title: localizedTitle } : section,
+        products: await getHomeSectionProducts(section, categories),
+      };
+    }),
   );
 
   // Fallback when the admin hasn't added any "أقسام الرئيسية" yet: show one

@@ -58,15 +58,6 @@ class ApiKeyResource extends Resource
                     ->copyable()
                     ->fontFamily('mono'),
 
-                TextColumn::make('temp_secret')
-                    ->label('الـ Secret (V2_API_SECRET)')
-                    ->getStateUsing(fn (ApiKey $r) => \Illuminate\Support\Facades\Cache::get('apikey_plain_secret_' . $r->id))
-                    ->placeholder('مخفي للحماية — اضغط "تدوير الـ Secret" لإظهاره')
-                    ->copyable()
-                    ->color('success')
-                    ->weight('bold')
-                    ->fontFamily('mono'),
-
                 ToggleColumn::make('is_active')
                     ->label('مفعّل'),
 
@@ -92,9 +83,8 @@ class ApiKeyResource extends Resource
                     ->modalDescription('سيتم إبطال الـ Secret القديم فوراً، ويجب تحديثه في ملف البيئة (.env) للجهة المرتبطة.')
                     ->action(function (ApiKey $record) {
                         $secret = $record->regenerateSecret();
-                        \Illuminate\Support\Facades\Cache::put('apikey_plain_secret_' . $record->id, $secret, now()->addMinutes(10));
                         Notification::make()
-                            ->title('تم توليد Secret جديد — انسخه من الجدول مباشرة!')
+                            ->title('تم توليد Secret جديد — انسخه الآن (يظهر مرة واحدة فقط)')
                             ->body("V2_API_KEY={$record->key}\nV2_API_SECRET={$secret}")
                             ->success()
                             ->persistent()

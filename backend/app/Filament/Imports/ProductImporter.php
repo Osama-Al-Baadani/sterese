@@ -369,8 +369,14 @@ class ProductImporter extends Importer
             ImportColumn::make('categories_list')
                 ->label('الأقسام / الأقسام الفرعية')
                 ->fillRecordUsing(fn () => null)
-                ->guess(['الأقسام الفرعية', 'الأقسام', 'التصنيف', 'القسم', 'categories_list', 'categories', 'Categories'])
+                ->guess(['الأقسام الفرعية (عربي)', 'الأقسام الفرعية', 'الأقسام', 'التصنيف', 'القسم', 'categories_list', 'categories', 'Categories'])
                 ->example('لبنة، افضل العروض'),
+
+            ImportColumn::make('categories_list_en')
+                ->label('الأقسام الفرعية (إنجليزي — اختياري)')
+                ->fillRecordUsing(fn () => null)
+                ->guess(['الأقسام الفرعية (إنجليزي)', 'الأقسام الإنجليزية', 'categories_list_en', 'English Categories'])
+                ->example('Labneh, Best Offers'),
 
             ImportColumn::make('category_slugs')
                 ->label('وسوم الأقسام (Slugs — اختياري)')
@@ -1265,8 +1271,9 @@ class ProductImporter extends Importer
                 $unitVal = trim($m[1]);
             }
 
-            // Description
+            // Description (Arabic & English fallbacks)
             $catsRaw = trim((string) ($col($csvRow, 'categories_list') ?? ''));
+            $catsEnRaw = trim((string) ($col($csvRow, 'categories_list_en') ?? ''));
             $descVal = self::cleanDescription($col($csvRow, 'description'));
             if ($descVal === null) {
                 $descParts = [$name];
@@ -1283,6 +1290,16 @@ class ProductImporter extends Importer
                     }
                 }
                 $descVal = implode('، ', $descParts) . ($nameEnVal ? " ({$nameEnVal})" : '') . '.';
+            }
+
+            $descEnVal = self::cleanDescription($col($csvRow, 'description_en'));
+            if ($descEnVal === null && $nameEnVal !== null) {
+                $enBrand = isset($brandObj) && $brandObj?->name_en ? " by {$brandObj->name_en}" : '';
+                $enCats = $catsEnRaw !== ''
+                    ? array_values(array_filter(array_map('trim', preg_split('/[,،|]+/u', $catsEnRaw))))
+                    : [];
+                $enCatPart = !empty($enCats) ? ' in ' . implode(' & ', array_slice($enCats, 0, 2)) : '';
+                $descEnVal = "{$nameEnVal}{$enBrand}{$enCatPart} — carefully selected for dependable quality and everyday value.";
             }
 
             // Stock & attributes
@@ -1336,7 +1353,7 @@ class ProductImporter extends Importer
                 'short_description'    => self::cleanDescription($col($csvRow, 'short_description')),
                 'short_description_en' => self::cleanDescription($col($csvRow, 'short_description_en')),
                 'description'          => $descVal,
-                'description_en'       => self::cleanDescription($col($csvRow, 'description_en')),
+                'description_en'       => $descEnVal,
                 'price'                => $finalPrice,
                 'regular_price'        => $regular,
                 'sale_price'           => $salePrice,
@@ -1379,6 +1396,9 @@ class ProductImporter extends Importer
             $catIds = [];
             if ($effectiveCatsRaw !== '') {
                 $items = array_values(array_unique(array_filter(array_map('trim', preg_split('/[,،|]+/u', $effectiveCatsRaw)))));
+                $enItems = $catsEnRaw !== ''
+                    ? array_values(array_filter(array_map('trim', preg_split('/[,،|]+/u', $catsEnRaw))))
+                    : [];
                 $slugsList = $slugsRaw !== ''
                     ? array_values(array_filter(array_map('trim', preg_split('/[,،|\s]+/u', strtolower($slugsRaw)))))
                     : [];
@@ -1398,6 +1418,7 @@ class ProductImporter extends Importer
                         if ($currentParent && mb_strtolower($childName) === mb_strtolower($currentParent->name)) {
                             $childName = $stepName . ' متنوعة';
                         }
+                        $childNameEn = (count($chain) === 1 && isset($enItems[$idx]) && $enItems[$idx] !== '') ? $enItems[$idx] : null;
                         $pId = $currentParent?->id;
                         $subKey = ($pId ?? 'root') . '|' . mb_strtolower($childName);
                         $catObj = $pId === null
@@ -1410,6 +1431,7 @@ class ProductImporter extends Importer
                                 : ($currentParent ? "{$currentParent->slug}-{$childName}" : $childName);
                             $catObj = Category::create([
                                 'name'               => $childName,
+                                'name_en'            => $childNameEn,
                                 'slug'               => $preferredSlug,
                                 'parent_id'          => $pId,
                                 'external_image_url' => $firstImage,
@@ -1420,6 +1442,8 @@ class ProductImporter extends Importer
                             } else {
                                 $subCatsByParentAndName[$subKey] = $catObj;
                             }
+                        } elseif (empty($catObj->name_en) && $childNameEn !== null) {
+                            $catObj->update(['name_en' => $childNameEn]);
                         }
                         $currentParent = $catObj;
                         $lastCat = $catObj;

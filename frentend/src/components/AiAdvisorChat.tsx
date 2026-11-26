@@ -30,14 +30,11 @@ export default function AiAdvisorChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "model",
-      text: isAr
-        ? "أهلاً بك! أنا المستشار الذكي في المتجر، اسألني عن أي منتج، سعره، أو توفره وسأساعدك فوراً."
-        : "Welcome! I'm your smart store advisor. Ask me about any product, price, or availability.",
-    },
-  ]);
+  const welcomeText = isAr
+    ? "أهلاً بك! أنا المستشار الذكي في المتجر، اسألني عن أي منتج، سعره، أو توفره وسأساعدك فوراً."
+    : "Welcome! I'm your smart store advisor. Ask me about any product, price, or availability.";
+  const [messages, setMessages] = useState<Message[]>([]);
+  const displayMessages: Message[] = [{ role: "model", text: welcomeText }, ...messages];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -128,7 +125,7 @@ export default function AiAdvisorChat() {
 
           {/* Messages */}
           <div className="flex-1 space-y-3 overflow-y-auto bg-[#f8fafc] p-4 text-sm">
-            {messages.map((msg, idx) => (
+            {displayMessages.map((msg, idx) => (
               <div
                 key={idx}
                 className={`flex flex-col gap-2 ${msg.role === "user" ? "items-start" : "items-end"}`}

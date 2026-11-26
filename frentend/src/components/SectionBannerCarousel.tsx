@@ -23,16 +23,24 @@ export default function SectionBannerCarousel({
   if (banners.length === 0) return null;
 
   return (
-    <div className="mb-6">
-      <div className="relative aspect-[4/1] w-full overflow-hidden rounded-2xl bg-navy-900/[0.03]">
+    <div className="-mx-4 mb-5 sm:mx-0 sm:mb-6">
+      <div className="relative aspect-[3.25/1] w-full overflow-hidden rounded-none bg-navy-900/[0.03] sm:aspect-[4/1] sm:rounded-2xl">
         {banners.map((b, i) => (
           <Link
             key={i}
             href={b.link || "/browse"}
+            tabIndex={i === active ? 0 : -1}
+            aria-hidden={i !== active}
             className="absolute inset-0 transition-opacity duration-700"
             style={{ opacity: i === active ? 1 : 0, pointerEvents: i === active ? "auto" : "none" }}
           >
-            <Image src={b.image_url} alt={title} fill priority={i === 0} className="object-cover" />
+            <Image
+              src={b.image_url}
+              alt={title}
+              fill
+              sizes="(min-width: 1280px) 1232px, 100vw"
+              className="object-cover object-center"
+            />
           </Link>
         ))}
       </div>

@@ -73,7 +73,7 @@ class CatalogController extends Controller
             }
         }
 
-        // Search across Arabic/English name, SKU, barcode, short description
+        // Search across Arabic/English name, SKU, barcode, descriptions, and category names
         if ($request->filled('search')) {
             $term = trim((string) $request->query('search'));
             if ($term !== '') {
@@ -82,7 +82,11 @@ class CatalogController extends Controller
                         ->orWhere('name_en', 'like', "%{$term}%")
                         ->orWhere('sku', 'like', "%{$term}%")
                         ->orWhere('barcode', 'like', "%{$term}%")
-                        ->orWhere('short_description', 'like', "%{$term}%");
+                        ->orWhere('short_description', 'like', "%{$term}%")
+                        ->orWhere('short_description_en', 'like', "%{$term}%")
+                        ->orWhereHas('categories', fn ($cq) => $cq
+                            ->where('categories.name', 'like', "%{$term}%")
+                            ->orWhere('categories.name_en', 'like', "%{$term}%"));
                 });
             }
         }

@@ -11,12 +11,18 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const ids = sp.get("ids");
   if (ids) {
-    const products = await getProducts({ include: ids, perPage: 100 });
-    return NextResponse.json(products);
+    // `fresh=1` (cart sync) skips the 300s data cache so a customer never
+    // checks out at a price or stock level that changed minutes ago.
+    const products = await getProducts({ include: ids, perPage: 100, fresh: sp.get("fresh") === "1" });
+    return NextResponse.json(products, sp.get("fresh") === "1" ? { headers: { "Cache-Control": "no-store" } } : undefined);
   }
 
   const orderby = sp.get("orderby");
   const order = sp.get("order");
+  const minPriceRaw = sp.get("min_price");
+  const maxPriceRaw = sp.get("max_price");
+  const minPrice = minPriceRaw && !Number.isNaN(Number(minPriceRaw)) ? Number(minPriceRaw) : undefined;
+  const maxPrice = maxPriceRaw && !Number.isNaN(Number(maxPriceRaw)) ? Number(maxPriceRaw) : undefined;
   const products = await getProducts({
     search: sp.get("search") ?? undefined,
     category: sp.get("category") ?? undefined,
@@ -24,6 +30,8 @@ export async function GET(req: NextRequest) {
     tag: sp.get("tag") ?? undefined,
     orderby: orderby === "date" || orderby === "price" ? orderby : "popularity",
     order: order === "asc" ? "asc" : "desc",
+    minPrice,
+    maxPrice,
     inStockOnly: sp.get("in_stock") === "1",
     page: Number(sp.get("page") ?? "1") || 1,
     perPage: Number(sp.get("per_page") ?? "24") || 24,

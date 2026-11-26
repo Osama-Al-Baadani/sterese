@@ -1,28 +1,42 @@
 import type { Metadata } from "next";
 import { ChevronDown } from "lucide-react";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig } from "@/lib/api";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-import { hreflangAlternates } from "@/lib/i18n-helpers";
+import { localizedAlternates } from "@/lib/i18n-helpers";
 
-export const metadata: Metadata = {
-  title: "الأسئلة الشائعة",
-  description: "إجابات على أكثر الأسئلة شيوعاً حول الطلب، الشحن، الدفع، والإرجاع بالمخازن الاقتصادية.",
-  alternates: { canonical: "/faq", languages: hreflangAlternates("/faq") },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "pages.faq" });
+  return {
+    title: t("title"),
+    description: t("description"),
+    alternates: localizedAlternates("/faq", locale),
+  };
+}
 
-export default async function FaqPage() {
-  const config = await getAppConfig();
+export default async function FaqPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const [config, t] = await Promise.all([
+    getAppConfig(),
+    getTranslations({ locale, namespace: "pages.faq" }),
+  ]);
 
   return (
     <>
       <Header />
       <main className="flex-1">
         <div className="mx-auto max-w-2xl px-4 py-14 sm:px-6 lg:px-8">
-          <h1 className="mb-8 text-3xl font-extrabold text-navy-900">الأسئلة الشائعة</h1>
+          <h1 className="mb-8 text-3xl font-extrabold text-navy-900">{t("title")}</h1>
 
           {config.faqs.length === 0 ? (
-            <p className="text-navy-500">لا توجد أسئلة مضافة حالياً.</p>
+            <p className="text-navy-500">{t("empty")}</p>
           ) : (
             <div className="space-y-3">
               {config.faqs.map((f, i) => (

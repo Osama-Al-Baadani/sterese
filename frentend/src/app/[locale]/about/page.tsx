@@ -1,41 +1,50 @@
 import type { Metadata } from "next";
 import { BadgePercent, HeartHandshake, ShieldCheck, Truck } from "lucide-react";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig } from "@/lib/api";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-import { hreflangAlternates } from "@/lib/i18n-helpers";
+import { localizedAlternates } from "@/lib/i18n-helpers";
 
-export const metadata: Metadata = {
-  title: "من نحن",
-  description:
-    "المخازن الاقتصادية متجر إلكتروني سعودي يوفر كل احتياجاتك اليومية بعروض حصرية وجودة عالية وتوصيل سريع.",
-  alternates: { canonical: "/about", languages: hreflangAlternates("/about") },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "pages.about" });
+  return {
+    title: t("title"),
+    description: t("description"),
+    alternates: localizedAlternates("/about", locale),
+  };
+}
 
-const VALUES = [
-  { Icon: ShieldCheck, title: "جودة مضمونة", body: "نختار منتجاتنا بعناية لنضمن لك أعلى مستوى من الجودة." },
-  { Icon: Truck, title: "توصيل سريع", body: "فريق توصيل مخصص يوصلك طلبك في أسرع وقت ممكن." },
-  { Icon: BadgePercent, title: "أسعار منافسة", body: "عروض وخصومات مستمرة على أوسع تشكيلة منتجات." },
-  { Icon: HeartHandshake, title: "خدمة عملاء", body: "فريق دعم جاهز للرد على استفساراتك في أي وقت." },
-];
+export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const [config, t] = await Promise.all([
+    getAppConfig(),
+    getTranslations({ locale, namespace: "pages.about" }),
+  ]);
 
-export default async function AboutPage() {
-  const config = await getAppConfig();
+  const values = [
+    { Icon: ShieldCheck, title: t("quality"), body: t("qualityBody") },
+    { Icon: Truck, title: t("delivery"), body: t("deliveryBody") },
+    { Icon: BadgePercent, title: t("prices"), body: t("pricesBody") },
+    { Icon: HeartHandshake, title: t("support"), body: t("supportBody") },
+  ];
 
   return (
     <>
       <Header />
       <main className="flex-1">
         <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-extrabold text-navy-900">من نحن</h1>
-          <p className="mt-4 leading-8 text-navy-700">
-            المخازن الاقتصادية متجر إلكتروني سعودي يهدف لتوفير كل احتياجاتك اليومية في مكان واحد
-            — بعروض حصرية، جودة عالية، وتوصيل سريع. نؤمن إن التسوق لازم يكون سهل وموثوق، ولهذا
-            نحرص على اختيار كل منتج بعناية ونطور خدماتنا باستمرار لراحتك.
-          </p>
+          <h1 className="text-3xl font-extrabold text-navy-900">{t("title")}</h1>
+          <p className="mt-4 leading-8 text-navy-700">{t("body")}</p>
 
           <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {VALUES.map(({ Icon, title, body }) => (
+            {values.map(({ Icon, title, body }) => (
               <div key={title} className="flex gap-4 rounded-2xl border border-navy-900/8 p-5">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                   <Icon className="h-6 w-6" aria-hidden />

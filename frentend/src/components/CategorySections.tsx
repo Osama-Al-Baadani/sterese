@@ -1,4 +1,4 @@
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getProducts } from "@/lib/api";
 import { descendantIds } from "@/lib/category-tree";
@@ -34,7 +34,7 @@ export default async function CategorySections({
 
   const visible = sections.filter((s) => s.products.length > 0);
   if (visible.length === 0) return null;
-  const locale = await getLocale();
+  const [locale, tHome] = await Promise.all([getLocale(), getTranslations("home")]);
 
   return (
     <div className="space-y-8">
@@ -46,7 +46,7 @@ export default async function CategorySections({
               href={`/browse?category=${category.id}`}
               className="text-xs font-bold text-brand-700 hover:underline"
             >
-              عرض الكل
+              {tHome("seeAll")}
             </Link>
           </div>
           <HomeSectionProducts products={products} />

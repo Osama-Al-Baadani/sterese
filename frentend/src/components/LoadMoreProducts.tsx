@@ -15,6 +15,8 @@ export interface BrowseFilterParams {
   tag?: string;
   orderby: string;
   order: string;
+  minPrice?: string;
+  maxPrice?: string;
   inStock: boolean;
 }
 
@@ -68,6 +70,8 @@ export default function LoadMoreProducts({
     if (filters.tag) params.set("tag", filters.tag);
     params.set("orderby", filters.orderby);
     params.set("order", filters.order);
+    if (filters.minPrice) params.set("min_price", filters.minPrice);
+    if (filters.maxPrice) params.set("max_price", filters.maxPrice);
     if (filters.inStock) params.set("in_stock", "1");
     params.set("page", String(nextPage));
     // One extra item, same trick as the initial server fetch — if it comes
@@ -89,11 +93,11 @@ export default function LoadMoreProducts({
 
   return (
     <>
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-3 sm:gap-4">
         {products.map((p) => (
           <div
             key={p.id}
-            className="w-[calc(33.333%-0.667rem)] sm:w-[calc(25%-0.75rem)] lg:w-[calc(20%-0.8rem)]"
+            className="w-[calc(50%-0.375rem)] sm:w-[calc(25%-0.75rem)] lg:w-[calc(20%-0.8rem)]"
           >
             <ProductCard product={p} locale={locale} />
           </div>

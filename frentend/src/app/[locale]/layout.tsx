@@ -6,8 +6,10 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
+import CartDrawer from "@/components/CartDrawer";
 import ErrorLogger from "@/components/ErrorLogger";
 import { FavoritesProvider } from "@/lib/favorites-context";
+import { ToastProvider } from "@/lib/toast-context";
 import { safeJsonLd } from "@/lib/format";
 import { isIndexable } from "@/lib/seo";
 import { gtmScript, GtmNoscript } from "@/components/GoogleTagManager";
@@ -34,6 +36,27 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "meta" });
   const indexable = await isIndexable();
 
+  const defaultKeywords =
+    locale === "ar"
+      ? [
+          "المخازن الاقتصادية",
+          "متجر المخازن الاقتصادية",
+          "تسوق اونلاين السعودية",
+          "متجر الكتروني الرياض",
+          "مواد غذائية",
+          "منظفات",
+          "عروض وتخفيضات",
+          "توصيل سريع الرياض",
+        ]
+      : [
+          "Al Makhazen Al Eqtisadeya",
+          "online store Saudi Arabia",
+          "Riyadh grocery delivery",
+          "supermarket online",
+          "deals and discounts",
+          "fast delivery Riyadh",
+        ];
+
   return {
     metadataBase: new URL(siteUrl),
     title: {
@@ -41,18 +64,31 @@ export async function generateMetadata({
       template: `%s | ${t("brand")}`,
     },
     description: t("description"),
+    keywords: defaultKeywords,
     // Belt-and-suspenders alongside robots.ts — this repeats site-wide
     // whatever robots.ts already tells crawlers, so a page-level metadata
     // override can't accidentally re-enable indexing outside production.
     robots: {
       index: indexable,
       follow: indexable,
+      googleBot: {
+        index: indexable,
+        follow: indexable,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+      },
     },
     openGraph: {
       siteName: t("brand"),
+      description: t("description"),
       locale: locale === "ar" ? "ar_SA" : "en_US",
       type: "website",
       images: [{ url: "/logo.png" }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: t("defaultTitle"),
+      description: t("description"),
     },
   };
 }
@@ -120,11 +156,16 @@ export default async function LocaleLayout({
         <ErrorLogger />
         {/* Pass locale and messages explicitly so client components always match the active route locale */}
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <AuthProvider>
-            <CartProvider>
-              <FavoritesProvider>{children}</FavoritesProvider>
-            </CartProvider>
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <CartProvider>
+                <FavoritesProvider>
+                  {children}
+                  <CartDrawer />
+                </FavoritesProvider>
+              </CartProvider>
+            </AuthProvider>
+          </ToastProvider>
         </NextIntlClientProvider>
       </body>
     </html>

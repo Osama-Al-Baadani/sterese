@@ -1,10 +1,19 @@
 import type { Metadata } from "next";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig } from "@/lib/api";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import OrderStatus from "@/components/OrderStatus";
 
-export const metadata: Metadata = { title: "حالة الطلب" };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "orderStatus" });
+  return { title: t("title") };
+}
 
 // Where checkout lands now: /order-confirmation/{id}/{access_key}. The key
 // (handed back only to whoever created the order) is what lets this page
@@ -14,9 +23,10 @@ export const metadata: Metadata = { title: "حالة الطلب" };
 export default async function OrderConfirmationWithKeyPage({
   params,
 }: {
-  params: Promise<{ id: string; key: string }>;
+  params: Promise<{ id: string; key: string; locale: string }>;
 }) {
-  const { id, key } = await params;
+  const { id, key, locale } = await params;
+  setRequestLocale(locale);
   const config = await getAppConfig();
 
   return (

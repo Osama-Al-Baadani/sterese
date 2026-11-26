@@ -1,17 +1,19 @@
 "use client";
 
-import { Link } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 
 export default function CartIcon() {
-  const { count } = useCart();
+  const tNav = useTranslations("nav");
+  const { count, openDrawer } = useCart();
 
   return (
-    <Link
-      href="/cart"
+    <button
+      type="button"
+      onClick={openDrawer}
       className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-navy-700 transition hover:bg-navy-900/5"
-      aria-label="السلة"
+      aria-label={tNav("cart")}
     >
       <ShoppingCart className="h-5 w-5" aria-hidden />
       {count > 0 && (
@@ -19,6 +21,6 @@ export default function CartIcon() {
           {count}
         </span>
       )}
-    </Link>
+    </button>
   );
 }

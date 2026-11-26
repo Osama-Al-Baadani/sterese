@@ -1,7 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Minus, Plus, ShoppingCart } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
+import { useToast } from "@/lib/toast-context";
 import type { Product } from "@/lib/types";
 
 export default function AddToCartButton({
@@ -13,7 +15,9 @@ export default function AddToCartButton({
   disabled?: boolean;
   compact?: boolean;
 }) {
+  const tCommon = useTranslations("common");
   const { items, addItem, setQuantity, maxQtyFor } = useCart();
+  const { showToast } = useToast();
   const inCart = items.find((i) => i.product.id === product.id);
   const maxQty = maxQtyFor(product);
 
@@ -28,7 +32,7 @@ export default function AddToCartButton({
             : "w-full cursor-not-allowed rounded-full bg-navy-900/10 py-3.5 text-base font-bold text-navy-300"
         }
       >
-        غير متوفر
+        {tCommon("unavailable")}
       </button>
     );
   }
@@ -53,7 +57,7 @@ export default function AddToCartButton({
               ? "flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100"
               : "flex h-9 w-9 items-center justify-center rounded-full text-brand-700 hover:bg-brand-100"
           }
-          aria-label="إنقاص الكمية"
+          aria-label={tCommon("decreaseQty")}
         >
           <Minus className={compact ? "h-3 w-3" : "h-4 w-4"} aria-hidden />
         </button>
@@ -69,7 +73,7 @@ export default function AddToCartButton({
               ? "flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100 disabled:opacity-40"
               : "flex h-9 w-9 items-center justify-center rounded-full text-brand-700 hover:bg-brand-100 disabled:opacity-40"
           }
-          aria-label="زيادة الكمية"
+          aria-label={tCommon("increaseQty")}
         >
           <Plus className={compact ? "h-3 w-3" : "h-4 w-4"} aria-hidden />
         </button>
@@ -80,15 +84,18 @@ export default function AddToCartButton({
   return (
     <button
       type="button"
-      onClick={() => addItem(product, 1)}
+      onClick={() => {
+        addItem(product, 1);
+        showToast(tCommon("addedToCartToast"), "success");
+      }}
       className={
         compact
-          ? "flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2 text-xs font-bold text-white transition hover:bg-brand-700"
-          : "flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700"
+          ? "flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2 text-xs font-bold text-white transition active:scale-[0.98] hover:bg-brand-700"
+          : "flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition active:scale-[0.98] hover:bg-brand-700"
       }
     >
       <ShoppingCart className={compact ? "h-3.5 w-3.5" : "h-5 w-5"} aria-hidden />
-      أضف للسلة
+      {tCommon("addToCart")}
     </button>
   );
 }

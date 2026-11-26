@@ -1,19 +1,31 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useLocale } from "next-intl"; // Read active locale to send to /api/checkout
+import { useLocale, useTranslations } from "next-intl"; // Read active locale to send to /api/checkout
 import { Link, useRouter } from "@/i18n/navigation"; // Locale-aware router so COD confirmation keeps /en
 import { useEffect, useRef, useState } from "react";
-import { Banknote, CreditCard, Loader2, MapPin, Pencil, Tag } from "lucide-react";
+import { AlertTriangle, Banknote, CheckCircle2, CreditCard, Loader2, MapPin, Navigation, Tag } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 import { useAuth } from "@/lib/auth-context";
-import { useCart } from "@/lib/cart-context";
+import { useCart, useCartSync } from "@/lib/cart-context";
 import { deliveryFeeFor, findZoneForCity, nearBranchFeeFor } from "@/lib/delivery";
-import type { CouponValidation, DeliveryZone, StoreSettings } from "@/lib/types";
+import type { CouponValidation, CustomerAddress, DeliveryZone, StoreSettings } from "@/lib/types";
 import type { LocationPickResult } from "./LocationPickerModal";
 import SarPrice from "./SarPrice";
 
 const LocationPickerModal = dynamic(() => import("./LocationPickerModal"), { ssr: false });
+const HEADER_LOCATION_KEY = "storeseco_location_v1";
+
+function toLocationResult(addr: CustomerAddress): LocationPickResult | null {
+  if (addr.lat == null || addr.lng == null) return null;
+  return {
+    lat: Number(addr.lat),
+    lng: Number(addr.lng),
+    address: addr.address_text,
+    city: addr.city ?? "",
+    locationType: addr.label || "home",
+  };
+}
 
 export default function CheckoutForm({
   deliveryZones,
@@ -23,9 +35,14 @@ export default function CheckoutForm({
   storeSettings: StoreSettings;
 }) {
   const locale = useLocale(); // Active UI locale (ar or en)
+  const t = useTranslations("checkout");
+  const tAccount = useTranslations("account");
+  const tCommon = useTranslations("common");
   const router = useRouter();
-  const { items, subtotal, clear } = useCart();
+  const { items, subtotal, clear, changes, unavailableIds, removeUnavailable } = useCart();
   const { customer, hydrated } = useAuth();
+
+  useCartSync();
 
   // Require login before checkout, same as the app — direct navigation to
   // /checkout (bookmark, back button, typed URL) bypasses the cart button's
@@ -77,8 +94,55 @@ export default function CheckoutForm({
     setEmail((prev) => prev || customer.email);
   }, [customer]);
 
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [headerLocation, setHeaderLocation] = useState<LocationPickResult | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [location, setLocation] = useState<LocationPickResult | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+
+  // Read the location already chosen in the header so we can prefill checkout
+  // without forcing the customer to pick on the map a second time.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HEADER_LOCATION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as LocationPickResult;
+        if (parsed && typeof parsed.lat === "number" && typeof parsed.lng === "number") {
+          setHeaderLocation(parsed);
+          setLocation((prev) => prev ?? parsed);
+          setSelectedSource((prev) => prev ?? "header");
+        }
+      }
+    } catch {
+      // ignore malformed header location
+    }
+  }, []);
+
+  // Load customer's saved addresses and auto-select the default (or first) one.
+  useEffect(() => {
+    const activePhone = customer?.phone;
+    if (!activePhone) return;
+    let cancelled = false;
+    fetch(`/api/account/addresses?phone=${encodeURIComponent(activePhone)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: CustomerAddress[]) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const valid = list.filter((a) => a.lat != null && a.lng != null);
+        setSavedAddresses(valid);
+        if (valid.length > 0) {
+          const preferred = valid.find((a) => a.is_default) ?? valid[0];
+          const picked = toLocationResult(preferred);
+          if (picked) {
+            setLocation(picked);
+            setSelectedSource(`saved:${preferred.id}`);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [customer?.phone]);
 
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cod">("card");
 
@@ -139,6 +203,8 @@ export default function CheckoutForm({
   const total = Math.max(0, subtotal + effectiveDelivery + codFee - discount);
 
   const belowMinimum = storeSettings.min_order_value > 0 && subtotal < storeSettings.min_order_value;
+  const hasUnavailable = unavailableIds.length > 0;
+  const hasPriceChanges = !hasUnavailable && Object.keys(changes).length > 0;
 
   // Cart changed after the coupon was applied (qty edited, item added or
   // removed) — the shown discount no longer reflects what the server would
@@ -147,7 +213,7 @@ export default function CheckoutForm({
     if (coupon && couponCartKey !== null && cartKey !== couponCartKey) {
       setCoupon(null);
       setCouponCartKey(null);
-      setCouponError("تغيّرت سلتك — أعد إدخال كود الخصم للتأكد من احتسابه");
+      setCouponError(t("couponCartChanged"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartKey]);
@@ -163,7 +229,7 @@ export default function CheckoutForm({
       );
       const data = await res.json();
       if (!res.ok) {
-        setCouponError(data.message ?? "كود الخصم غير صحيح");
+        setCouponError(data.message ?? t("couponInvalid"));
         setCoupon(null);
         setCouponCartKey(null);
         return;
@@ -171,7 +237,7 @@ export default function CheckoutForm({
       setCoupon(data);
       setCouponCartKey(cartKey);
     } catch {
-      setCouponError("تعذّر التحقق من الكود الآن");
+      setCouponError(t("couponFailed"));
     } finally {
       setCheckingCoupon(false);
     }
@@ -179,9 +245,9 @@ export default function CheckoutForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (items.length === 0 || belowMinimum) return;
+    if (items.length === 0 || belowMinimum || hasUnavailable) return;
     if (!location) {
-      setSubmitError("حدد موقع التوصيل على الخريطة أولاً");
+      setSubmitError(t("selectLocation"));
       return;
     }
     setSubmitting(true);
@@ -224,7 +290,7 @@ export default function CheckoutForm({
       });
       const data = await res.json();
       if (!res.ok) {
-        setSubmitError(data.message ?? "تعذّر إنشاء الطلب، حاول مرة أخرى");
+        setSubmitError(data.message ?? t("orderFailed"));
         setSubmitting(false);
         return;
       }
@@ -241,7 +307,7 @@ export default function CheckoutForm({
         `&clientSecret=${data.client_secret}`;
       window.location.assign(checkoutUrl);
     } catch {
-      setSubmitError("تعذّر الاتصال بالخادم، حاول مرة أخرى");
+      setSubmitError(t("connectionFailed"));
       setSubmitting(false);
     }
   }
@@ -249,13 +315,21 @@ export default function CheckoutForm({
   if (items.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-navy-900/10 py-16 text-center">
-        <p className="mb-4 font-semibold text-navy-700">سلتك فاضية</p>
+        <p className="mb-4 font-semibold text-navy-700">{t("emptyCart")}</p>
         <Link href="/browse" className="text-brand-700 underline">
-          تصفح المنتجات
+          {tCommon("browseProducts")}
         </Link>
       </div>
     );
   }
+
+  const labelText = (label: string) => {
+    const key = label as "home" | "work" | "friend" | "other";
+    if (["home", "work", "friend", "other"].includes(key)) {
+      return tAccount(`label.${key}`);
+    }
+    return label;
+  };
 
   return (
     <>
@@ -268,176 +342,267 @@ export default function CheckoutForm({
           onClose={() => setShowPicker(false)}
           onConfirm={(result) => {
             setLocation(result);
+            setSelectedSource("custom");
             setShowPicker(false);
           }}
         />
       )}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
-      <div className="space-y-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="الاسم الكامل" required>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="input"
-              placeholder="مثال: محمد أحمد"
-            />
-          </Field>
-          <Field label="رقم الجوال" required>
-            <input
-              required
-              type="tel"
-              dir="ltr"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="input text-right"
-              placeholder="05xxxxxxxx"
-            />
-          </Field>
-        </div>
-
-        <Field label="البريد الإلكتروني (اختياري)">
-          <input
-            type="email"
-            dir="ltr"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input text-right"
-            placeholder="example@email.com"
-          />
-        </Field>
-
-        <Field label="عنوان التوصيل" required>
-          {location ? (
-            <div className="flex items-start gap-3 rounded-xl border border-navy-900/10 bg-white p-3.5">
-              <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-navy-900">{location.address}</p>
-                {location.city && <p className="mt-0.5 text-xs text-navy-500">{location.city}</p>}
-                {isNearBranch && (
-                  <p className="mt-1.5 text-xs font-semibold text-brand-700">
-                    ✓ ضمن نطاق التوصيل القريب من الفرع — رسوم توصيل أوفر
-                  </p>
-                )}
+        <div className="space-y-5">
+          {hasUnavailable && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <div className="flex items-center gap-2 font-semibold">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" aria-hidden />
+                <span>{t("unavailableItems")}</span>
               </div>
               <button
                 type="button"
-                onClick={() => setShowPicker(true)}
-                className="flex shrink-0 items-center gap-1 rounded-lg border border-navy-900/10 px-2.5 py-1.5 text-xs font-bold text-navy-700 transition hover:bg-navy-900/5"
+                onClick={removeUnavailable}
+                className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700"
               >
-                <Pencil className="h-3.5 w-3.5" aria-hidden />
-                تغيير
+                {t("removeUnavailable")}
               </button>
             </div>
-          ) : (
+          )}
+
+          {hasPriceChanges && (
+            <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+              <span>{t("pricesUpdated")}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label={t("fullName")} required>
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input"
+                placeholder={t("fullNamePlaceholder")}
+              />
+            </Field>
+            <Field label={t("phone")} required>
+              <input
+                required
+                type="tel"
+                dir="ltr"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="input text-start"
+                placeholder="05xxxxxxxx"
+              />
+            </Field>
+          </div>
+
+          <Field label={t("email")}>
+            <input
+              type="email"
+              dir="ltr"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input text-start"
+              placeholder="example@email.com"
+            />
+          </Field>
+
+          <div>
+            <span className="mb-2 block text-sm font-bold text-navy-900">
+              {t("deliveryAddress")} <span className="text-rose-500">*</span>
+            </span>
+
+            <div className="space-y-2.5">
+              {savedAddresses.map((addr) => {
+                const picked = toLocationResult(addr);
+                if (!picked) return null;
+                const key = `saved:${addr.id}`;
+                const active = selectedSource === key;
+                return (
+                  <button
+                    key={addr.id}
+                    type="button"
+                    onClick={() => {
+                      setLocation(picked);
+                      setSelectedSource(key);
+                    }}
+                    className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-start transition ${
+                      active ? "border-brand-600 bg-brand-50/70" : "border-navy-900/10 bg-white hover:border-brand-200"
+                    }`}
+                  >
+                    <span
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                        active ? "border-brand-600 bg-brand-600 text-white" : "border-navy-900/20"
+                      }`}
+                    >
+                      {active && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-brand-700">{labelText(addr.label)}</span>
+                        {addr.city && <span className="text-xs text-navy-400">· {addr.city}</span>}
+                      </div>
+                      <p className="mt-0.5 text-sm font-semibold text-navy-900">{addr.address_text}</p>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {headerLocation && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocation(headerLocation);
+                    setSelectedSource("header");
+                  }}
+                  className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-start transition ${
+                    selectedSource === "header"
+                      ? "border-brand-600 bg-brand-50/70"
+                      : "border-navy-900/10 bg-white hover:border-brand-200"
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                      selectedSource === "header" ? "border-brand-600 bg-brand-600 text-white" : "border-navy-900/20"
+                    }`}
+                  >
+                    {selectedSource === "header" && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-navy-600">
+                      <Navigation className="h-3.5 w-3.5 text-brand-600" aria-hidden />
+                      <span>{t("headerLocation")}</span>
+                      {headerLocation.city && <span className="text-navy-400">· {headerLocation.city}</span>}
+                    </div>
+                    <p className="mt-0.5 text-sm font-semibold text-navy-900">{headerLocation.address}</p>
+                  </div>
+                </button>
+              )}
+
+              {selectedSource === "custom" && location && (
+                <div className="flex items-start gap-3 rounded-xl border border-brand-600 bg-brand-50/70 p-3.5">
+                  <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-navy-900">{location.address}</p>
+                    {location.city && <p className="mt-0.5 text-xs text-navy-500">{location.city}</p>}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowPicker(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700 transition hover:bg-brand-100"
+              >
+                <MapPin className="h-4 w-4" aria-hidden />
+                {location ? t("newAddress") : t("pickOnMap")}
+              </button>
+
+              {isNearBranch && (
+                <p className="text-xs font-semibold text-brand-700">{t("nearBranch")}</p>
+              )}
+            </div>
+          </div>
+
+          <Field label={t("notes")}>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="input resize-none"
+              placeholder={t("notesPlaceholder")}
+            />
+          </Field>
+
+          <div>
+            <span className="mb-2 block text-sm font-bold text-navy-900">{t("paymentMethod")}</span>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <PaymentOption
+                label={t("payCard")}
+                description={t("payCardDesc")}
+                Icon={CreditCard}
+                selected={paymentMethod === "card"}
+                onSelect={() => setPaymentMethod("card")}
+              />
+              {storeSettings.cod.enabled && (
+                <PaymentOption
+                  label={t("payCod")}
+                  description={
+                    storeSettings.cod.fee_enabled ? (
+                      t.rich("codFeeDesc", {
+                        fee: () => <SarPrice amount={storeSettings.cod.fee_amount} />,
+                      })
+                    ) : (
+                      t("codNoFee")
+                    )
+                  }
+                  Icon={Banknote}
+                  selected={paymentMethod === "cod"}
+                  onSelect={() => setPaymentMethod("cod")}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="h-fit space-y-4 rounded-2xl border border-navy-900/8 p-5">
+          <h2 className="text-base font-bold text-navy-900">{t("summary")}</h2>
+
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Tag className="pointer-events-none absolute top-1/2 start-3 h-4 w-4 -translate-y-1/2 text-navy-300" aria-hidden />
+              <input
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value)}
+                placeholder={t("couponCode")}
+                className="input ps-9"
+              />
+            </div>
             <button
               type="button"
-              onClick={() => setShowPicker(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 px-4 py-4 text-sm font-bold text-brand-700 transition hover:bg-brand-100"
+              onClick={applyCoupon}
+              disabled={checkingCoupon}
+              className="shrink-0 rounded-xl bg-navy-900 px-4 text-sm font-bold text-white transition hover:bg-navy-700 disabled:opacity-60"
             >
-              <MapPin className="h-4 w-4" aria-hidden />
-              تحديد الموقع على الخريطة
+              {checkingCoupon ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : t("applyCoupon")}
             </button>
-          )}
-        </Field>
+          </div>
+          {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
+          {coupon && <p className="text-xs font-semibold text-brand-700">{t("couponApplied", { code: coupon.code })}</p>}
 
-        <Field label="ملاحظات (اختياري)">
-          <textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="input resize-none"
-            placeholder="أي تعليمات إضافية للتوصيل"
-          />
-        </Field>
-
-        <div>
-          <span className="mb-2 block text-sm font-bold text-navy-900">طريقة الدفع</span>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <PaymentOption
-              label="الدفع بالبطاقة"
-              description="عبر بوابة دفع آمنة"
-              Icon={CreditCard}
-              selected={paymentMethod === "card"}
-              onSelect={() => setPaymentMethod("card")}
+          <div className="space-y-2 border-t border-navy-900/10 pt-4 text-sm">
+            <Row label={t("subtotal")} value={<SarPrice amount={subtotal} />} />
+            <Row
+              label={t("deliveryFee")}
+              value={effectiveDelivery === 0 ? tCommon("free") : <SarPrice amount={effectiveDelivery} />}
             />
-            {storeSettings.cod.enabled && (
-              <PaymentOption
-                label="الدفع عند الاستلام"
-                description={
-                  storeSettings.cod.fee_enabled ? (
-                    <>رسوم إضافية <SarPrice amount={storeSettings.cod.fee_amount} /></>
-                  ) : (
-                    "بدون رسوم إضافية"
-                  )
-                }
-                Icon={Banknote}
-                selected={paymentMethod === "cod"}
-                onSelect={() => setPaymentMethod("cod")}
-              />
+            {codFee > 0 && <Row label={t("codFee")} value={<SarPrice amount={codFee} />} />}
+            {discount > 0 && (
+              <Row label={t("discount")} value={<>- <SarPrice amount={discount} /></>} highlight />
             )}
+            <div className="flex items-center justify-between border-t border-navy-900/10 pt-2 text-base font-extrabold text-navy-900">
+              <span>{t("total")}</span>
+              <span><SarPrice amount={total} /></span>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div className="h-fit space-y-4 rounded-2xl border border-navy-900/8 p-5">
-        <h2 className="text-base font-bold text-navy-900">ملخص الطلب</h2>
+          {belowMinimum && (
+            <p className="text-xs font-semibold text-rose-600">
+              {t.rich("minOrder", {
+                min: () => <SarPrice amount={storeSettings.min_order_value} />,
+              })}
+            </p>
+          )}
+          {submitError && <p className="text-xs font-semibold text-rose-600">{submitError}</p>}
 
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Tag className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-navy-300" aria-hidden />
-            <input
-              value={couponInput}
-              onChange={(e) => setCouponInput(e.target.value)}
-              placeholder="كود الخصم"
-              className="input pr-9"
-            />
-          </div>
           <button
-            type="button"
-            onClick={applyCoupon}
-            disabled={checkingCoupon}
-            className="shrink-0 rounded-xl bg-navy-900 px-4 text-sm font-bold text-white transition hover:bg-navy-700 disabled:opacity-60"
+            type="submit"
+            disabled={submitting || belowMinimum || hasUnavailable}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-navy-900/10 disabled:text-navy-300 disabled:shadow-none"
           >
-            {checkingCoupon ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "تطبيق"}
+            {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+            {paymentMethod === "cod" ? t("placeOrder") : t("payNow")}
           </button>
         </div>
-        {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
-        {coupon && <p className="text-xs font-semibold text-brand-700">تم تطبيق الكود {coupon.code} ✓</p>}
-
-        <div className="space-y-2 border-t border-navy-900/10 pt-4 text-sm">
-          <Row label="المجموع الفرعي" value={<SarPrice amount={subtotal} />} />
-          <Row
-            label="رسوم التوصيل"
-            value={effectiveDelivery === 0 ? "مجاني" : <SarPrice amount={effectiveDelivery} />}
-          />
-          {codFee > 0 && <Row label="رسوم الدفع عند الاستلام" value={<SarPrice amount={codFee} />} />}
-          {discount > 0 && (
-            <Row label="الخصم" value={<>- <SarPrice amount={discount} /></>} highlight />
-          )}
-          <div className="flex items-center justify-between border-t border-navy-900/10 pt-2 text-base font-extrabold text-navy-900">
-            <span>الإجمالي</span>
-            <span><SarPrice amount={total} /></span>
-          </div>
-        </div>
-
-        {belowMinimum && (
-          <p className="text-xs font-semibold text-rose-600">
-            الحد الأدنى للطلب <SarPrice amount={storeSettings.min_order_value} />
-          </p>
-        )}
-        {submitError && <p className="text-xs font-semibold text-rose-600">{submitError}</p>}
-
-        <button
-          type="submit"
-          disabled={submitting || belowMinimum}
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-navy-900/10 disabled:text-navy-300 disabled:shadow-none"
-        >
-          {submitting && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
-          {paymentMethod === "cod" ? "تأكيد الطلب" : "الدفع الآن"}
-        </button>
-      </div>
       </form>
     </>
   );
@@ -480,7 +645,7 @@ function PaymentOption({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex items-center gap-3 rounded-xl border p-3.5 text-right transition ${
+      className={`flex items-center gap-3 rounded-xl border p-3.5 text-start transition ${
         selected ? "border-brand-600 bg-brand-50" : "border-navy-900/10 bg-white hover:border-brand-200"
       }`}
     >

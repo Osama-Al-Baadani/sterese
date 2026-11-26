@@ -2,12 +2,13 @@
 
 import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { Product } from "@/lib/types";
 import ProductCard from "./ProductCard";
 
 export default function HomeSectionProducts({ products }: { products: Product[] }) {
   const locale = useLocale();
+  const tCommon = useTranslations("common");
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   // In RTL, modern browsers scroll into increasingly negative scrollLeft as
@@ -23,7 +24,7 @@ export default function HomeSectionProducts({ products }: { products: Product[] 
       <button
         type="button"
         onClick={() => scrollBy(320)}
-        aria-label="عرض السابق"
+        aria-label={tCommon("showPrevious")}
         className="hidden shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white p-1.5 text-navy-500 shadow-sm transition hover:text-brand-700 sm:flex"
       >
         <ChevronRight className="h-4 w-4" aria-hidden />
@@ -43,7 +44,7 @@ export default function HomeSectionProducts({ products }: { products: Product[] 
       <button
         type="button"
         onClick={() => scrollBy(-320)}
-        aria-label="عرض المزيد"
+        aria-label={tCommon("showMore")}
         className="hidden shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white p-1.5 text-navy-500 shadow-sm transition hover:text-brand-700 sm:flex"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />

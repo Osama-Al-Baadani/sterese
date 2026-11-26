@@ -1,17 +1,27 @@
 import type { Metadata } from "next";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig } from "@/lib/api";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import OrderStatus from "@/components/OrderStatus";
 
-export const metadata: Metadata = { title: "حالة الطلب" };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "orderStatus" });
+  return { title: t("title") };
+}
 
 export default async function OrderConfirmationPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; locale: string }>;
 }) {
-  const { id } = await params;
+  const { id, locale } = await params;
+  setRequestLocale(locale);
   const config = await getAppConfig();
 
   return (

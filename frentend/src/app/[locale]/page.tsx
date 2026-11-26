@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { getAppConfig, getCategories, getHomeDepartments, getHomeSectionProducts, getHomeSections } from "@/lib/api";
 import { hasProducts } from "@/lib/category-tree";
-import { localizedName } from "@/lib/i18n-helpers";
+import { localizedAlternates, localizedName } from "@/lib/i18n-helpers";
 import type { HomeSection } from "@/lib/types";
 import AnnouncementBar from "@/components/AnnouncementBar";
-import AppDownloadBanner from "@/components/AppDownloadBanner";
 import CategoryGrid, { type DeptItem } from "@/components/CategoryGrid";
 import FeaturesRow from "@/components/FeaturesRow";
 import Footer from "@/components/Footer";
@@ -14,6 +13,7 @@ import Header from "@/components/Header";
 import HomeSections from "@/components/HomeSections";
 import PromoBanner from "@/components/PromoBanner";
 import PromoCards from "@/components/PromoCards";
+import RecentlyViewedSection from "@/components/RecentlyViewedSection";
 
 export async function generateMetadata({
   params,
@@ -23,24 +23,18 @@ export async function generateMetadata({
   const { locale } = await params;
 
   return {
-    alternates: {
-      canonical: locale === "ar" ? "/" : "/en",
-      languages: {
-        ar: "/",
-        en: "/en",
-        "x-default": "/",
-      },
-    },
+    alternates: localizedAlternates("/", locale),
   };
 }
 
 export default async function Home() {
-  const [config, categories, departments, homeSections, locale] = await Promise.all([
+  const [config, categories, departments, homeSections, locale, tHome] = await Promise.all([
     getAppConfig(),
     getCategories(),
     getHomeDepartments(),
     getHomeSections(),
     getLocale(),
+    getTranslations("home"),
   ]);
   const { webCarouselBanners, gridTileBanners, gridStackBanners, promoCards, promoBottomCards, storeSettings } = config;
 
@@ -88,7 +82,7 @@ export default async function Home() {
       ? departments
         .map((d): DeptItem | null => {
           if (d.source_type === "tag") {
-            return { id: d.id, label: d.title || "وسم", imageUrl: d.image_url, emoji: d.icon, isTag: true };
+            return { id: d.id, label: d.title || tHome("tagFallback"), imageUrl: d.image_url, emoji: d.icon, isTag: true };
           }
           const cat = categories.find((c) => c.id === d.id);
           // A category picked here with nothing to show (no products
@@ -121,8 +115,8 @@ export default async function Home() {
         />
         <CategoryGrid items={deptItems} />
         <HomeSections sections={sectionsWithProducts} />
+        <RecentlyViewedSection />
         <FeaturesRow badges={storeSettings.badges} />
-        <AppDownloadBanner />
         <PromoCards cards={promoBottomCards} />
         <PromoBanner />
       </main>

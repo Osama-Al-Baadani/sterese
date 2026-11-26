@@ -1,9 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Link } from "@/i18n/navigation";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Briefcase, Gift, Heart, Home, LogOut, MapPin, Package, Pencil, Plus, Trash2, User, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import type { CustomerAddress, DeliveryZone } from "@/lib/types";
@@ -11,15 +11,17 @@ import type { LocationPickResult } from "./LocationPickerModal";
 
 const LocationPickerModal = dynamic(() => import("./LocationPickerModal"), { ssr: false });
 
-const LABELS: Record<CustomerAddress["label"], { text: string; Icon: typeof Home }> = {
-  home: { text: "المنزل", Icon: Home },
-  work: { text: "العمل", Icon: Briefcase },
-  friend: { text: "صديق", Icon: Users },
-  other: { text: "أخرى", Icon: MapPin },
+const LABEL_ICONS: Record<CustomerAddress["label"], typeof Home> = {
+  home: Home,
+  work: Briefcase,
+  friend: Users,
+  other: MapPin,
 };
 
 export default function AccountView({ deliveryZones }: { deliveryZones: DeliveryZone[] }) {
   const router = useRouter();
+  const t = useTranslations("account");
+  const tCommon = useTranslations("common");
   const { customer, authToken, hydrated, isLoggedIn, logout, setProfileName } = useAuth();
 
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
@@ -110,8 +112,10 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
   }
 
   if (!hydrated || !customer) {
-    return <div className="py-20 text-center text-navy-400">جارٍ التحميل...</div>;
+    return <div className="py-20 text-center text-navy-400">{t("loading")}</div>;
   }
+
+  const labelText = (key: CustomerAddress["label"]) => t(`label.${key}`);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -141,16 +145,16 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
                   onChange={(e) => setNameInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && saveName()}
                   className="input py-1.5 text-sm"
-                  placeholder="الاسم الكامل"
+                  placeholder={t("namePlaceholder")}
                 />
                 <button type="button" onClick={saveName} className="shrink-0 text-xs font-bold text-brand-700">
-                  حفظ
+                  {tCommon("save")}
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-lg font-extrabold text-navy-900">
-                  {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "بدون اسم"}
+                  {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || t("noName")}
                 </h2>
                 <button
                   type="button"
@@ -159,7 +163,7 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
                     setEditingName(true);
                   }}
                   className="text-navy-300 hover:text-navy-600"
-                  aria-label="تعديل الاسم"
+                  aria-label={t("editName")}
                 >
                   <Pencil className="h-3.5 w-3.5" aria-hidden />
                 </button>
@@ -175,7 +179,7 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
             className="flex shrink-0 items-center gap-1.5 rounded-full border border-navy-900/10 px-3 py-2 text-xs font-bold text-navy-700 transition hover:bg-navy-900/5"
           >
             <LogOut className="h-3.5 w-3.5" aria-hidden />
-            تسجيل الخروج
+            {t("logout")}
           </button>
         </div>
       </section>
@@ -186,7 +190,7 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
             <Gift className="h-5 w-5" aria-hidden />
           </span>
           <p className="flex-1 text-sm font-bold text-amber-800">
-            باقي لك {freeDeliveryRemaining} {freeDeliveryRemaining === 1 ? "توصيلة مجانية" : "توصيلات مجانية"} 🎉
+            {t("freeDeliveryLeft", { count: freeDeliveryRemaining })}
           </p>
         </div>
       )}
@@ -199,7 +203,7 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
           <Package className="h-5 w-5" aria-hidden />
         </span>
-        <span className="flex-1 font-bold text-navy-900">طلباتي</span>
+        <span className="flex-1 font-bold text-navy-900">{t("myOrders")}</span>
       </Link>
 
       {/* Favorites link */}
@@ -210,33 +214,33 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
           <Heart className="h-5 w-5" aria-hidden />
         </span>
-        <span className="flex-1 font-bold text-navy-900">المفضلة</span>
+        <span className="flex-1 font-bold text-navy-900">{t("favorites")}</span>
       </Link>
 
       {/* Addresses */}
       <section>
-        <h2 className="mb-3 text-base font-bold text-navy-900">عناويني</h2>
+        <h2 className="mb-3 text-base font-bold text-navy-900">{t("myAddresses")}</h2>
 
         {loadingAddresses ? (
-          <p className="text-sm text-navy-400">جارٍ التحميل...</p>
+          <p className="text-sm text-navy-400">{t("loading")}</p>
         ) : (
           <div className="space-y-2.5">
             {addresses.map((a) => {
-              const { text, Icon } = LABELS[a.label];
+              const Icon = LABEL_ICONS[a.label] ?? MapPin;
               return (
                 <div key={a.id} className="flex items-start gap-3 rounded-xl border border-navy-900/8 p-3.5">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-900/5 text-navy-500">
                     <Icon className="h-4 w-4" aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-navy-500">{text}</p>
+                    <p className="text-xs font-bold text-navy-500">{labelText(a.label)}</p>
                     <p className="mt-0.5 text-sm font-semibold text-navy-900">{a.address_text}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => deleteAddress(a.id)}
                     className="shrink-0 text-navy-300 hover:text-rose-600"
-                    aria-label="حذف العنوان"
+                    aria-label={t("deleteAddress")}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />
                   </button>
@@ -250,8 +254,8 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
           <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3.5">
             <p className="text-sm font-bold text-navy-900">{pendingLocation.address}</p>
             <div className="mt-3 grid grid-cols-4 gap-2">
-              {(Object.keys(LABELS) as CustomerAddress["label"][]).map((key) => {
-                const { text, Icon } = LABELS[key];
+              {(Object.keys(LABEL_ICONS) as CustomerAddress["label"][]).map((key) => {
+                const Icon = LABEL_ICONS[key];
                 const selected = pendingLabel === key;
                 return (
                   <button
@@ -263,7 +267,7 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
                     }`}
                   >
                     <Icon className="h-4 w-4" aria-hidden />
-                    {text}
+                    {labelText(key)}
                   </button>
                 );
               })}
@@ -275,14 +279,14 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
                 disabled={savingAddress}
                 className="flex-1 rounded-full bg-brand-600 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-60"
               >
-                حفظ العنوان
+                {t("saveAddress")}
               </button>
               <button
                 type="button"
                 onClick={() => setPendingLocation(null)}
                 className="rounded-full border border-navy-900/10 px-4 py-2.5 text-sm font-bold text-navy-700"
               >
-                إلغاء
+                {tCommon("cancel")}
               </button>
             </div>
           </div>
@@ -293,7 +297,7 @@ export default function AccountView({ deliveryZones }: { deliveryZones: Delivery
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 px-4 py-3.5 text-sm font-bold text-brand-700 transition hover:bg-brand-100"
           >
             <Plus className="h-4 w-4" aria-hidden />
-            إضافة عنوان جديد
+            {t("addAddress")}
           </button>
         )}
       </section>

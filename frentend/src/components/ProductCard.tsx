@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
 import { PackageX, Star } from "lucide-react";
 import { bundleLabel } from "@/lib/format";
 import { localizedName } from "@/lib/i18n-helpers";
@@ -9,44 +10,53 @@ import FavoriteButton from "./FavoriteButton";
 import SarPrice from "./SarPrice";
 
 export default function ProductCard({ product, locale }: { product: Product; locale: string }) {
+  const tCommon = useTranslations("common");
   const outOfStock = product.stock_status === "outofstock";
   const image = product.images[0]?.src;
   const rating = Number(product.average_rating);
   const bundle = bundleLabel(product.bundle_qty);
   const name = localizedName(product, locale);
+  const regularPrice = Number(product.regular_price);
+  const salePrice = Number(product.price);
+  const discountPct =
+    product.on_sale && regularPrice > salePrice && regularPrice > 0
+      ? Math.round(((regularPrice - salePrice) / regularPrice) * 100)
+      : 0;
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-2xl border border-navy-900/8 bg-white transition hover:shadow-lg hover:shadow-navy-900/5">
-      <Link href={`/product/${product.id}`} className="relative block aspect-square bg-navy-900/[0.03]">
+    <div className="group flex flex-col overflow-hidden rounded-2xl border border-navy-900/8 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-navy-900/8">
+      <Link href={`/product/${product.id}`} className="relative block aspect-square overflow-hidden bg-navy-900/[0.03]">
         {image ? (
           <Image
             src={image}
             alt={name}
             fill
             sizes="(min-width: 1024px) 20vw, 45vw"
-            className="object-cover transition group-hover:scale-105"
+            className="object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-navy-300">
             <PackageX className="h-10 w-10" aria-hidden />
           </div>
         )}
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+        <div className="absolute top-2 end-2 flex flex-col items-end gap-1">
           {bundle && (
             <span className="rounded-md bg-gradient-to-l from-emerald-600 to-emerald-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white shadow">
               {bundle}
             </span>
           )}
           {product.on_sale && (
-            <span className="rounded-full bg-rose-600 px-2.5 py-1 text-[11px] font-bold text-white">خصم</span>
+            <span className="rounded-full bg-rose-600 px-2.5 py-0.5 text-[11px] font-extrabold text-white shadow-sm">
+              {discountPct > 0 ? `-${discountPct}%` : tCommon("sale")}
+            </span>
           )}
         </div>
-        <div className="absolute top-2 left-2">
+        <div className="absolute top-2 start-2">
           <FavoriteButton productId={product.id} size="sm" />
         </div>
         {outOfStock && (
           <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-bold text-navy-700">
-            نفدت الكمية
+            {tCommon("outOfStock")}
           </span>
         )}
       </Link>

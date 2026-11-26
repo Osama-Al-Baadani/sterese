@@ -1,8 +1,8 @@
 import Image from "next/image";
-import { Search } from "lucide-react";
 import { Suspense } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getAppConfig, getCategories } from "@/lib/api";
+import { localizedName } from "@/lib/i18n-helpers";
 import { Link } from "@/i18n/navigation";
 import AccountIcon from "./AccountIcon";
 import CartIcon from "./CartIcon";
@@ -12,6 +12,7 @@ import LanguageSwitcher from "./LanguageSwitcher";
 import LocationButton from "./LocationButton";
 import MobileBottomNav from "./MobileBottomNav";
 import MobileCategoriesMenu from "./MobileCategoriesMenu";
+import SearchBar from "./SearchBar";
 
 export default async function Header() {
   const [{ deliveryZones }, categories, t, locale] = await Promise.all([
@@ -20,6 +21,16 @@ export default async function Header() {
     getTranslations("nav"),
     getLocale(),
   ]);
+
+  const searchKeywords = Array.from(
+    new Set(
+      categories
+        .filter((c) => c.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 14)
+        .map((c) => localizedName(c, locale)),
+    ),
+  );
 
   return (
     <>
@@ -34,25 +45,7 @@ export default async function Header() {
               <span className="hidden text-lg font-extrabold text-navy-900 sm:inline">{t("brandName")}</span>
             </Link>
 
-            {/* Restored original search form with locale-aware action and RTL/LTR logical spacing */}
-            <form
-              action={locale === "en" ? "/en/browse" : "/browse"}
-              method="get"
-              className="order-3 w-full basis-full sm:order-none sm:basis-auto sm:flex-1"
-            >
-              <label className="relative block">
-                <Search
-                  className="pointer-events-none absolute top-1/2 start-4 h-5 w-5 -translate-y-1/2 text-navy-300"
-                  aria-hidden
-                />
-                <input
-                  type="search"
-                  name="search"
-                  placeholder={t("searchPlaceholder")}
-                  className="w-full rounded-full border border-black/5 bg-white py-2.5 ps-12 pe-4 text-base text-navy-900 outline-none transition focus:ring-2 focus:ring-navy-900/15 sm:ps-11 sm:text-sm"
-                />
-              </label>
-            </form>
+            <SearchBar keywords={searchKeywords} />
 
             <LocationButton deliveryZones={deliveryZones} />
 

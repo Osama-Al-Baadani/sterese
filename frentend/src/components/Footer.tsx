@@ -134,6 +134,11 @@ export default async function Footer({ settings }: { settings: StoreSettings }) 
                 </Link>
               </li>
               <li>
+                <Link href="/track-order" className="inline-block py-0.5 transition hover:text-white">
+                  {t("trackOrder")}
+                </Link>
+              </li>
+              <li>
                 <Link href="/about" className="inline-block py-0.5 transition hover:text-white">
                   {t("about")}
                 </Link>

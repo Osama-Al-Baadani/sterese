@@ -353,6 +353,44 @@ class OrderController extends Controller
         return response()->json(['message' => 'Deprecated WooCommerce endpoint'], 410);
     }
 
+    /**
+     * POST /api/orders/public-track
+     * Allows a customer to track an order by order_number (id) + customer phone.
+     */
+    public function publicTrack(Request $request)
+    {
+        $orderNumber = trim((string) $request->input('order_number', ''));
+        $phone = trim((string) $request->input('phone', ''));
+
+        if ($orderNumber === '' || $phone === '') {
+            return response()->json(['message' => 'رقم الطلب ورقم الجوال مطلوبان'], 422);
+        }
+
+        $digits = preg_replace('/\D/', '', $phone);
+        $core = preg_replace('/^(00966|966|0)/', '', $digits);
+        if (strlen($core) < 7) {
+            return response()->json(['message' => 'رقم الجوال غير صحيح'], 422);
+        }
+
+        $orderId = (int) ltrim($orderNumber, '#');
+        $variants = array_unique(["0{$core}", "+966{$core}", "966{$core}", $core]);
+
+        $order = Order::query()
+            ->where('id', $orderId)
+            ->where(function ($q) use ($variants) {
+                foreach ($variants as $v) {
+                    $q->orWhere('customer_phone', 'like', "%{$v}");
+                }
+            })
+            ->first();
+
+        if (!$order) {
+            return response()->json(['message' => 'لم يتم العثور على طلب مطابق لهذه البيانات'], 404);
+        }
+
+        return response()->json($this->formatOrder($order));
+    }
+
     public function markPaid(Request $request, $wooOrderId)
     {
         return response()->json(['message' => 'Deprecated WooCommerce endpoint'], 410);

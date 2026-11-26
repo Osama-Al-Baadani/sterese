@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import { ChevronDown, PackageSearch, SlidersHorizontal } from "lucide-react";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig, getBrands, getCategories, getProducts } from "@/lib/api";
 import { childrenOf, descendantIds, hasProducts } from "@/lib/category-tree";
-import { hreflangAlternates } from "@/lib/i18n-helpers";
+import { localizedAlternates, localizedName, localizedPath } from "@/lib/i18n-helpers";
 import Breadcrumbs from "@/components/Breadcrumbs";
-import BrowseFilters from "@/components/BrowseFilters";
+import BrowseInteractive from "@/components/BrowseInteractive";
 import CategorySections from "@/components/CategorySections";
 import CategoryTabs from "@/components/CategoryTabs";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-import LoadMoreProducts from "@/components/LoadMoreProducts";
-import SortSelect from "@/components/SortSelect";
 import { safeJsonLd } from "@/lib/format";
 
 const PAGE_SIZE = 24;
@@ -26,40 +23,64 @@ function one(v: string | string[] | undefined): string | undefined {
 // pages — canonical collapses to just the category (or the bare listing),
 // which is the only distinction worth Google treating as a separate page.
 export async function generateMetadata({
+  params,
   searchParams,
 }: {
+  params: Promise<{ locale: string }>;
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
-  const sp = await searchParams;
+  const [{ locale }, sp, t] = await Promise.all([
+    params,
+    searchParams,
+    params.then(({ locale: l }) => getTranslations({ locale: l, namespace: "browse" })),
+  ]);
   const category = one(sp.category);
   const canonical = category ? `/browse?category=${category}` : "/browse";
 
-  const categoryName = category
-    ? (await getCategories()).find((c) => c.id === Number(category))?.name
+  const catObj = category
+    ? (await getCategories()).find((c) => c.id === Number(category))
     : undefined;
+  const categoryName = catObj ? localizedName(catObj, locale) : undefined;
+  const keywords = [
+    categoryName,
+    one(sp.search),
+    locale === "ar" ? "المخازن الاقتصادية" : "Al Makhazen Al Eqtisadeya",
+    locale === "ar" ? "تصفح المنتجات" : "Browse Products",
+    locale === "ar" ? "عروض السعودية" : "Saudi Arabia deals",
+  ].filter((k): k is string => Boolean(k));
 
   return {
-    title: categoryName ?? "تصفح المنتجات",
+    title: categoryName ?? t("title"),
     description: categoryName
-      ? `تسوق ${categoryName} بأفضل الأسعار — عروض حصرية، جودة عالية، وتوصيل سريع من المخازن الاقتصادية.`
-      : "تصفح كل تشكيلة منتجات المخازن الاقتصادية — عروض حصرية، جودة عالية، وتوصيل سريع.",
-    alternates: {
-      canonical,
-      languages: hreflangAlternates(canonical),
-    },
+      ? t("metaCategoryDescription", { category: categoryName })
+      : t("metaDescription"),
+    keywords,
+    alternates: localizedAlternates(canonical, locale),
   };
 }
 
 export default async function BrowsePage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ locale: string }>;
   searchParams: Promise<SearchParams>;
 }) {
-  const sp = await searchParams;
+  const [{ locale }, sp] = await Promise.all([params, searchParams]);
+  setRequestLocale(locale);
+  const [t, tNav] = await Promise.all([
+    getTranslations({ locale, namespace: "browse" }),
+    getTranslations({ locale, namespace: "nav" }),
+  ]);
+
   const search = one(sp.search);
   const category = one(sp.category);
   const brand = one(sp.brand);
   const tag = one(sp.tag);
+  const minPrice = one(sp.min_price);
+  const maxPrice = one(sp.max_price);
+  const minPriceNum = minPrice && !Number.isNaN(Number(minPrice)) ? Number(minPrice) : undefined;
+  const maxPriceNum = maxPrice && !Number.isNaN(Number(maxPrice)) ? Number(maxPrice) : undefined;
   const sort = one(sp.sort) ?? "popularity-desc";
   const inStock = one(sp.in_stock) === "1";
   const page = Math.max(1, Number(one(sp.page) ?? "1") || 1);
@@ -100,6 +121,8 @@ export default async function BrowsePage({
           tag,
           orderby,
           order,
+          minPrice: minPriceNum,
+          maxPrice: maxPriceNum,
           inStockOnly: inStock,
           page,
           perPage: PAGE_SIZE + 1,
@@ -110,7 +133,9 @@ export default async function BrowsePage({
   const hasMore = fetched.length > PAGE_SIZE;
   const products = fetched.slice(0, PAGE_SIZE);
 
-  const activeCategoryName = selectedId ? categories.find((c) => c.id === selectedId)?.name : null;
+  const activeCategory = selectedId ? categories.find((c) => c.id === selectedId) : null;
+  const activeCategoryName = activeCategory ? localizedName(activeCategory, locale) : null;
+  const pageTitle = search ? t("searchResults", { query: search }) : activeCategoryName || t("title");
 
   // Lets Google understand this is a product-listing page (not just a page
   // that happens to contain products) and can surface individual items —
@@ -125,7 +150,7 @@ export default async function BrowsePage({
           itemListElement: products.map((p, i) => ({
             "@type": "ListItem",
             position: i + 1,
-            url: `${siteUrl}/product/${p.id}`,
+            url: `${siteUrl}${localizedPath(`/product/${p.id}`, locale)}`,
           })),
         }
       : null;
@@ -143,99 +168,46 @@ export default async function BrowsePage({
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <Breadcrumbs
             items={[
-              { label: "الرئيسية", href: "/" },
-              { label: activeCategoryName || "تصفح المنتجات" },
+              { label: tNav("home"), href: "/" },
+              { label: activeCategoryName || t("title") },
             ]}
           />
 
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-extrabold text-navy-900">
-                {search ? `نتائج البحث عن "${search}"` : activeCategoryName || "تصفح المنتجات"}
-              </h1>
-              {!showGrouped && <p className="mt-1 text-sm text-navy-500">{products.length} منتج</p>}
-            </div>
-            {!showGrouped && (
-              <Suspense fallback={null}>
-                <SortSelect current={sort} />
-              </Suspense>
-            )}
-          </div>
-
-          <div className={showGrouped ? "" : "grid grid-cols-1 gap-8 lg:grid-cols-[240px_minmax(0,1fr)]"}>
-            {!showGrouped && (
-              <>
-                <details className="rounded-2xl border border-navy-900/8 lg:hidden">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-bold text-navy-900">
-                    <span className="flex items-center gap-2">
-                      <SlidersHorizontal className="h-4 w-4 text-brand-600" aria-hidden />
-                      الفلاتر
-                    </span>
-                    <ChevronDown className="h-4 w-4 text-navy-400" aria-hidden />
-                  </summary>
-                  <div className="border-t border-navy-900/8 p-4">
-                    <BrowseFilters
-                      brands={brands}
-                      current={{ search, category, brand, sort, inStock }}
-                    />
-                  </div>
-                </details>
-
-                <aside className="hidden lg:block lg:sticky lg:top-20 lg:h-fit">
-                  <BrowseFilters
-                    brands={brands}
-                    current={{ search, category, brand, sort, inStock }}
-                  />
-                </aside>
-              </>
-            )}
-
-            <div>
+          {showGrouped ? (
+            <>
+              <div className="mb-6">
+                <h1 className="text-2xl font-extrabold text-navy-900">{pageTitle}</h1>
+              </div>
               <CategoryTabs
                 categories={categories}
                 selectedId={selectedId}
-                // search deliberately excluded: picking a category tab means
-                // "show me this category", not "this category AND my old
-                // search text" — carrying the search term forward used to
-                // filter the new category by an unrelated query and almost
-                // always landed on an empty "لا توجد منتجات مطابقة" even
-                // when the category clearly had products.
                 base={{ brand, sort, in_stock: inStock ? "1" : undefined }}
               />
-
-              {showGrouped ? (
-                <CategorySections subcategories={directChildren} categories={categories} />
-              ) : products.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-navy-900/10 py-20 text-center">
-                  <PackageSearch className="h-12 w-12 text-navy-300" aria-hidden />
-                  <p className="font-semibold text-navy-700">
-                    {page > 1 ? "ما فيه منتجات أكثر" : "ما فيه منتجات مطابقة"}
-                  </p>
-                  <p className="text-sm text-navy-500">
-                    {page > 1 ? "رجعت لآخر صفحة فيها منتجات" : "جرّب تغيير الفلاتر أو كلمة البحث"}
-                  </p>
-                </div>
-              ) : (
-                <LoadMoreProducts
-                  // Without a key, switching category/brand/search/sort tabs
-                  // only changes the URL's search params — the route segment
-                  // itself doesn't change, so Next.js keeps this same client
-                  // component mounted and its useState(initialProducts) never
-                  // re-reads the new props. The grid (and "load more" state)
-                  // stayed stuck on whatever was first loaded until a full
-                  // navigation elsewhere remounted it. Keying on every filter
-                  // but the page number forces a fresh mount on any real
-                  // filter change while still letting "load more" (page only)
-                  // append in place.
-                  key={[search, categoryFilter, brand, tag, orderby, order, inStock].join("|")}
-                  initialProducts={products}
-                  initialPage={page}
-                  initialHasMore={hasMore}
-                  filters={{ search, category: categoryFilter, brand, tag, orderby, order, inStock }}
-                />
-              )}
-            </div>
-          </div>
+              <CategorySections subcategories={directChildren} categories={categories} />
+            </>
+          ) : (
+            <BrowseInteractive
+              key={[search, category, brand, tag, sort, minPrice, maxPrice, inStock, page].join("|")}
+              title={pageTitle}
+              initialProducts={products}
+              initialHasMore={hasMore}
+              brands={brands}
+              categories={categories}
+              selectedId={selectedId}
+              initialState={{
+                search,
+                category,
+                categoryFilter,
+                brand,
+                tag,
+                sort,
+                minPrice,
+                maxPrice,
+                inStock,
+                page,
+              }}
+            />
+          )}
         </div>
       </main>
       <Footer settings={config.storeSettings} />

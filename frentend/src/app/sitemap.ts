@@ -1,19 +1,31 @@
 import type { MetadataRoute } from "next";
 import { getCategories, getProducts } from "@/lib/api";
+import { hreflangAlternates } from "@/lib/i18n-helpers";
 
-const STATIC_PATHS = ["/", "/browse", "/faq", "/contact", "/policies/terms", "/policies/privacy", "/policies/return"];
+const STATIC_PATHS = ["/", "/browse", "/track-order", "/about", "/faq", "/contact", "/policies/terms", "/policies/privacy", "/policies/return"];
 
-// Products are paginated in from the backend rather than requested all at
-// once — a growing catalog shouldn't require raising some arbitrary "give me
-// everything" limit on the API side. Capped at 50 pages (5,000 products)
-// as a sane runaway guard, not an expected ceiling.
+function absoluteAlternates(siteUrl: string, path: string) {
+  const alts = hreflangAlternates(path);
+  return {
+    languages: {
+      ar: `${siteUrl}${alts.ar === "/" ? "" : alts.ar}`,
+      en: `${siteUrl}${alts.en}`,
+    },
+  };
+}
+
 async function allProductUrls(siteUrl: string): Promise<MetadataRoute.Sitemap> {
   const urls: MetadataRoute.Sitemap = [];
   for (let page = 1; page <= 50; page++) {
     const products = await getProducts({ perPage: 100, page });
     if (products.length === 0) break;
     for (const p of products) {
-      urls.push({ url: `${siteUrl}/product/${p.id}`, changeFrequency: "daily", priority: 0.7 });
+      const path = `/product/${p.id}`;
+      const alternates = absoluteAlternates(siteUrl, path);
+      urls.push(
+        { url: `${siteUrl}${path}`, changeFrequency: "daily", priority: 0.7, alternates },
+        { url: `${siteUrl}/en${path}`, changeFrequency: "daily", priority: 0.7, alternates },
+      );
     }
     if (products.length < 100) break;
   }
@@ -21,21 +33,30 @@ async function allProductUrls(siteUrl: string): Promise<MetadataRoute.Sitemap> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const siteUrl = process.env.SITE_URL ?? "http://localhost:3000";
+  const siteUrl = (process.env.SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
   const [categories, productUrls] = await Promise.all([getCategories(), allProductUrls(siteUrl)]);
 
-  const staticUrls: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
-    url: `${siteUrl}${path}`,
-    changeFrequency: path === "/" ? "daily" : "weekly",
-    priority: path === "/" ? 1 : 0.5,
-  }));
+  const staticUrls: MetadataRoute.Sitemap = STATIC_PATHS.flatMap((path) => {
+    const alternates = absoluteAlternates(siteUrl, path);
+    const changeFrequency = path === "/" ? ("daily" as const) : ("weekly" as const);
+    const priority = path === "/" ? 1 : 0.5;
+    return [
+      { url: `${siteUrl}${path === "/" ? "" : path}`, changeFrequency, priority, alternates },
+      { url: `${siteUrl}/en${path === "/" ? "" : path}`, changeFrequency, priority, alternates },
+    ];
+  });
 
-  const categoryUrls: MetadataRoute.Sitemap = categories.map((c) => ({
-    url: `${siteUrl}/browse?category=${c.id}`,
-    changeFrequency: "daily",
-    priority: 0.6,
-  }));
+  const categoryUrls: MetadataRoute.Sitemap = categories
+    .filter((c) => c.count > 0)
+    .flatMap((c) => {
+      const path = `/browse?category=${c.id}`;
+      const alternates = absoluteAlternates(siteUrl, path);
+      return [
+        { url: `${siteUrl}${path}`, changeFrequency: "daily", priority: 0.6, alternates },
+        { url: `${siteUrl}/en${path}`, changeFrequency: "daily", priority: 0.6, alternates },
+      ];
+    });
 
   return [...staticUrls, ...categoryUrls, ...productUrls];
 }

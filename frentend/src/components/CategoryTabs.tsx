@@ -2,7 +2,9 @@
 
 import { useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { ancestorChain, buildCategoryIndex } from "@/lib/category-tree";
+import { localizedName } from "@/lib/i18n-helpers";
 import { Link } from "@/i18n/navigation";
 import type { Category } from "@/lib/types";
 
@@ -20,16 +22,19 @@ function TabRow({
   items,
   activeId,
   base,
+  locale,
+  prevLabel,
+  moreLabel,
 }: {
   items: Category[];
   activeId: number | null;
   base: Record<string, string | undefined>;
+  locale: string;
+  prevLabel: string;
+  moreLabel: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  // In RTL, modern browsers scroll into increasingly negative scrollLeft as
-  // content moves left (further from the start) — so "reveal more" and
-  // "back to start" are -240/+240 here, not the other way around.
   function scrollBy(amount: number) {
     scrollerRef.current?.scrollBy({ left: amount, behavior: "smooth" });
   }
@@ -39,7 +44,7 @@ function TabRow({
       <button
         type="button"
         onClick={() => scrollBy(240)}
-        aria-label="عرض السابق"
+        aria-label={prevLabel}
         className="hidden shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white p-1 text-navy-500 shadow-sm transition hover:text-brand-700 sm:flex"
       >
         <ChevronRight className="h-4 w-4" aria-hidden />
@@ -55,12 +60,13 @@ function TabRow({
             <Link
               key={c.id}
               href={hrefFor(base, c.id)}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition ${active
+              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+                active
                   ? "border-brand-600 bg-brand-600 text-white"
                   : "border-navy-900/10 bg-white text-navy-700 hover:border-brand-300 hover:bg-brand-50"
-                }`}
+              }`}
             >
-              {c.name}
+              {localizedName(c, locale)}
             </Link>
           );
         })}
@@ -69,7 +75,7 @@ function TabRow({
       <button
         type="button"
         onClick={() => scrollBy(-240)}
-        aria-label="عرض المزيد"
+        aria-label={moreLabel}
         className="hidden shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white p-1 text-navy-500 shadow-sm transition hover:text-brand-700 sm:flex"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
@@ -87,13 +93,13 @@ export default function CategoryTabs({
   selectedId: number | null;
   base: Record<string, string | undefined>;
 }) {
+  const locale = useLocale();
+  const tBrowse = useTranslations("browse");
+  const tCommon = useTranslations("common");
   const tree = useMemo(() => buildCategoryIndex(categories), [categories]);
   const roots = tree.roots;
 
-  const chain = useMemo(
-    () => ancestorChain(categories, selectedId),
-    [categories, selectedId]
-  );
+  const chain = useMemo(() => ancestorChain(categories, selectedId), [categories, selectedId]);
 
   if (roots.length === 0) return null;
 
@@ -101,10 +107,6 @@ export default function CategoryTabs({
     { items: roots, activeId: chain[0]?.id ?? null },
   ];
 
-  // Capped at two rows total (root categories, then the selected root's own
-  // children) — a third row for grandchildren made the strip too tall and
-  // was more drill-down than a category picker needs; going that deep is
-  // what the browse page's own category-filtered grid is for.
   if (chain[0]) {
     const kids = tree.getChildren(chain[0].id);
     if (kids.length > 0) {
@@ -116,11 +118,19 @@ export default function CategoryTabs({
     <div className="mb-6 space-y-2">
       {selectedId !== null && (
         <Link href={hrefFor(base, null)} className="inline-block text-xs font-semibold text-navy-500 underline hover:text-brand-700">
-          إلغاء تحديد القسم
+          {tBrowse("clearCategory")}
         </Link>
       )}
       {rows.map((row, i) => (
-        <TabRow key={i} items={row.items} activeId={row.activeId} base={base} />
+        <TabRow
+          key={i}
+          items={row.items}
+          activeId={row.activeId}
+          base={base}
+          locale={locale}
+          prevLabel={tCommon("showPrevious")}
+          moreLabel={tCommon("showMore")}
+        />
       ))}
     </div>
   );

@@ -6,6 +6,19 @@ export function formatSar(value: number | string): string {
   return `${n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2, numberingSystem: "latn" })} ر.س`;
 }
 
+/** Plain-text price for translated sentences (e.g. "Add 25.00 SAR more…"),
+ * where the symbol-font <SarPrice> component can't be embedded in a message.
+ * Always plain 0-9 digits, with the currency label in the active language. */
+export function formatPrice(value: number | string, locale: string): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  const formatted = (Number.isFinite(n) ? n : 0).toLocaleString(locale === "en" ? "en-US" : "ar-SA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    numberingSystem: "latn",
+  });
+  return locale === "en" ? `${formatted} SAR` : `${formatted} ر.س`;
+}
+
 /** "1+1" for bundle_qty=2, "1+2" for bundle_qty=3, etc. — mirrors the app's
  * Product.bundleLabel. null when the product isn't a bundle deal at all. */
 export function bundleLabel(bundleQty: number | null | undefined): string | null {

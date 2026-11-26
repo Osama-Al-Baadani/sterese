@@ -3,13 +3,15 @@
 import { Link } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useFavorites } from "@/lib/favorites-context";
 import ProductCard from "./ProductCard";
 import type { Product } from "@/lib/types";
 
 export default function FavoritesView() {
   const locale = useLocale();
+  const t = useTranslations("favorites");
+  const tCommon = useTranslations("common");
   const { ids, hydrated } = useFavorites();
   const [products, setProducts] = useState<Product[] | null>(null);
 
@@ -27,20 +29,20 @@ export default function FavoritesView() {
   }, [ids, hydrated]);
 
   if (!hydrated || products === null) {
-    return <div className="py-20 text-center text-navy-400">جارٍ التحميل...</div>;
+    return <div className="py-20 text-center text-navy-400">{t("loading")}</div>;
   }
 
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-navy-900/10 py-24 text-center">
         <Heart className="h-14 w-14 text-navy-300" aria-hidden />
-        <p className="text-lg font-bold text-navy-900">ما عندك منتجات مفضلة بعد</p>
-        <p className="text-sm text-navy-500">اضغط أيقونة القلب على أي منتج عشان تحفظه هنا</p>
+        <p className="text-lg font-bold text-navy-900">{t("empty")}</p>
+        <p className="text-sm text-navy-500">{t("emptyHint")}</p>
         <Link
           href="/browse"
           className="mt-2 inline-flex items-center gap-2 rounded-full bg-brand-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
         >
-          تصفح المنتجات
+          {tCommon("browseProducts")}
         </Link>
       </div>
     );

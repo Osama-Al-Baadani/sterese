@@ -2,12 +2,14 @@
 
 import { Link } from "@/i18n/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 import { useCart } from "@/lib/cart-context";
 import SarPrice from "./SarPrice";
 
 type Status = "pending" | "paid" | "cod" | "failed";
+const MAX_POLLS = 40; // ~2 minutes at 3s intervals
 
 interface OrderDetail {
   id: number;
@@ -20,6 +22,7 @@ interface OrderDetail {
 }
 
 export default function OrderStatus({ orderId, accessKey }: { orderId: string; accessKey?: string }) {
+  const t = useTranslations("orderStatus");
   const { clear } = useCart();
   const [status, setStatus] = useState<Status>("pending");
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -29,8 +32,11 @@ export default function OrderStatus({ orderId, accessKey }: { orderId: string; a
 
   useEffect(() => {
     let stop = false;
+    let attempts = 0;
 
     async function poll() {
+      if (stop) return;
+      attempts += 1;
       try {
         const res = await fetch(`/api/orders/${orderId}/status${keyQuery}`, { cache: "no-store" });
         const data = await res.json();
@@ -42,7 +48,11 @@ export default function OrderStatus({ orderId, accessKey }: { orderId: string; a
       } catch {
         // transient network error — next tick retries
       }
-      if (!stop) setTimeout(poll, 3000);
+      if (!stop && attempts < MAX_POLLS) {
+        setTimeout(poll, 3000);
+      } else if (!stop) {
+        setStatus("failed");
+      }
     }
 
     poll();
@@ -86,8 +96,8 @@ export default function OrderStatus({ orderId, accessKey }: { orderId: string; a
     return (
       <div className="flex flex-col items-center gap-4 py-20 text-center">
         <Loader2 className="h-12 w-12 animate-spin text-brand-600" aria-hidden />
-        <p className="text-lg font-bold text-navy-900">جارٍ التحقق من الدفع...</p>
-        <p className="text-sm text-navy-500">لا تغلق الصفحة، هذا يستغرق ثواني قليلة</p>
+        <p className="text-lg font-bold text-navy-900">{t("verifying")}</p>
+        <p className="text-sm text-navy-500">{t("verifyingHint")}</p>
       </div>
     );
   }
@@ -96,13 +106,13 @@ export default function OrderStatus({ orderId, accessKey }: { orderId: string; a
     return (
       <div className="flex flex-col items-center gap-4 py-20 text-center">
         <XCircle className="h-14 w-14 text-rose-500" aria-hidden />
-        <p className="text-lg font-bold text-navy-900">تعذّر إتمام الدفع</p>
-        <p className="text-sm text-navy-500">لم يتم خصم أي مبلغ — يمكنك إعادة المحاولة</p>
+        <p className="text-lg font-bold text-navy-900">{t("failed")}</p>
+        <p className="text-sm text-navy-500">{t("failedHint")}</p>
         <Link
           href="/checkout"
           className="mt-2 inline-flex items-center gap-2 rounded-full bg-brand-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
         >
-          إعادة المحاولة
+          {t("retry")}
         </Link>
       </div>
     );
@@ -111,27 +121,31 @@ export default function OrderStatus({ orderId, accessKey }: { orderId: string; a
   return (
     <div className="flex flex-col items-center gap-4 py-20 text-center">
       <CheckCircle2 className="h-14 w-14 text-brand-600" aria-hidden />
-      <p className="text-lg font-bold text-navy-900">تم استلام طلبك بنجاح! 🎉</p>
+      <p className="text-lg font-bold text-navy-900">{t("success")}</p>
       {order && (
         <p className="text-sm text-navy-500">
-          {status === "cod" ? "سيتم تحصيل المبلغ نقداً عند التسليم — " : ""}رقم الطلب #{order.order_number}
+          {status === "cod" ? t("codNote") : ""}
+          {t("orderNumber", { number: order.order_number })}
         </p>
       )}
       {order?.free_delivery?.applied && (
         <p className="rounded-full bg-amber-50 px-4 py-1.5 text-sm font-bold text-amber-700">
           {order.free_delivery.order_number === order.free_delivery.limit
-            ? "🎁 هذا كان آخر توصيل مجاني لك — استمتعت بكل الفرص المجانية!"
-            : `🎁 هذا طلبك المجاني رقم ${order.free_delivery.order_number} من ${order.free_delivery.limit}`}
+            ? t("lastFreeDelivery")
+            : t("freeDeliveryProgress", {
+                number: order.free_delivery.order_number ?? 1,
+                limit: order.free_delivery.limit,
+              })}
         </p>
       )}
       {order && (
-        <div className="mt-4 w-full max-w-sm rounded-2xl border border-navy-900/8 p-5 text-right">
+        <div className="mt-4 w-full max-w-sm rounded-2xl border border-navy-900/8 p-5 text-start">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-navy-500">الإجمالي</span>
+            <span className="text-navy-500">{t("total")}</span>
             <span className="font-bold text-navy-900"><SarPrice amount={order.total} /></span>
           </div>
           <div className="mt-1 flex items-center justify-between text-sm">
-            <span className="text-navy-500">التوصيل إلى</span>
+            <span className="text-navy-500">{t("deliveredTo")}</span>
             <span className="font-semibold text-navy-900">{order.city}</span>
           </div>
         </div>
@@ -140,7 +154,7 @@ export default function OrderStatus({ orderId, accessKey }: { orderId: string; a
         href="/browse"
         className="mt-2 inline-flex items-center gap-2 rounded-full bg-brand-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
       >
-        متابعة التسوق
+        {t("continueShopping")}
       </Link>
     </div>
   );

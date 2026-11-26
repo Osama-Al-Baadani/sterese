@@ -1,28 +1,42 @@
 import type { Metadata } from "next";
 import { Clock, Mail, MessageCircle, Phone } from "lucide-react";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig } from "@/lib/api";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-import { hreflangAlternates } from "@/lib/i18n-helpers";
+import { localizedAlternates } from "@/lib/i18n-helpers";
 
-export const metadata: Metadata = {
-  title: "تواصل معنا",
-  description: "تواصل مع فريق دعم المخازن الاقتصادية عبر الهاتف أو واتساب أو البريد الإلكتروني.",
-  alternates: { canonical: "/contact", languages: hreflangAlternates("/contact") },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "pages.contact" });
+  return {
+    title: t("title"),
+    description: t("description"),
+    alternates: localizedAlternates("/contact", locale),
+  };
+}
 
-export default async function ContactPage() {
-  const { storeSettings } = await getAppConfig();
+export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const [{ storeSettings }, t] = await Promise.all([
+    getAppConfig(),
+    getTranslations({ locale, namespace: "pages.contact" }),
+  ]);
 
   const rows = [
-    { Icon: Phone, label: "الهاتف", value: storeSettings.support_phone, href: `tel:${storeSettings.support_phone}` },
+    { Icon: Phone, label: t("phone"), value: storeSettings.support_phone, href: `tel:${storeSettings.support_phone}` },
     {
       Icon: MessageCircle,
-      label: "واتساب",
+      label: t("whatsapp"),
       value: storeSettings.whatsapp_phone,
       href: `https://wa.me/${storeSettings.whatsapp_phone.replace(/\D/g, "")}`,
     },
-    { Icon: Mail, label: "البريد الإلكتروني", value: storeSettings.support_email, href: `mailto:${storeSettings.support_email}` },
+    { Icon: Mail, label: t("email"), value: storeSettings.support_email, href: `mailto:${storeSettings.support_email}` },
   ].filter((r) => r.value);
 
   return (
@@ -30,8 +44,8 @@ export default async function ContactPage() {
       <Header />
       <main className="flex-1">
         <div className="mx-auto max-w-2xl px-4 py-14 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-extrabold text-navy-900">تواصل معنا</h1>
-          <p className="mt-3 text-navy-500">فريقنا جاهز لمساعدتك في أي وقت</p>
+          <h1 className="text-3xl font-extrabold text-navy-900">{t("title")}</h1>
+          <p className="mt-3 text-navy-500">{t("subtitle")}</p>
 
           <div className="mt-8 space-y-3">
             {rows.map((r) => (
@@ -44,7 +58,7 @@ export default async function ContactPage() {
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                   <r.Icon className="h-5 w-5" aria-hidden />
                 </span>
-                <span dir="rtl">
+                <span dir={locale === "en" ? "ltr" : "rtl"}>
                   <span className="block text-xs text-navy-500">{r.label}</span>
                   <span className="block font-semibold text-navy-900">{r.value}</span>
                 </span>
@@ -57,7 +71,7 @@ export default async function ContactPage() {
                   <Clock className="h-5 w-5" aria-hidden />
                 </span>
                 <div>
-                  <span className="block text-xs text-navy-500">ساعات العمل</span>
+                  <span className="block text-xs text-navy-500">{t("hours")}</span>
                   <span className="block font-semibold text-navy-900">{storeSettings.working_hours_weekday}</span>
                   <span className="block font-semibold text-navy-900">{storeSettings.working_hours_friday}</span>
                 </div>

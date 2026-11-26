@@ -163,6 +163,9 @@ export interface ProductFilters {
   inStockOnly?: boolean;
   page?: number;
   perPage?: number;
+  /** Bypass every cache layer — used where stale prices/stock would mislead
+   * the customer (cart price & availability sync). */
+  fresh?: boolean;
 }
 
 export async function getProducts(filters: ProductFilters = {}): Promise<Product[]> {
@@ -186,7 +189,7 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
         per_page: filters.perPage ?? 24,
       },
       // Search results change often and are cheap to refetch — skip ISR caching for them.
-      revalidate: filters.search ? false : 300,
+      revalidate: filters.search || filters.fresh ? false : 300,
     });
     return Array.isArray(data) ? data : [];
   } catch {
@@ -198,6 +201,7 @@ export async function getProduct(id: number): Promise<Product | null> {
   try {
     return await backendFetch<Product>(`v2/products/${id}`, { v2Auth: true });
   } catch {
-    return null;
+    const fallback = await getProducts({ include: String(id), perPage: 1 });
+    return fallback.find((p) => p.id === id) ?? null;
   }
 }

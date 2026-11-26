@@ -1,17 +1,19 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Heart } from "lucide-react";
 import { useFavorites } from "@/lib/favorites-context";
 
 export default function FavoriteIcon() {
+  const tNav = useTranslations("nav");
   const { ids } = useFavorites();
 
   return (
     <Link
       href="/favorites"
       className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-navy-700 transition hover:bg-navy-900/5"
-      aria-label="المفضلة"
+      aria-label={tNav("favorites")}
     >
       <Heart className="h-5 w-5" aria-hidden />
       {ids.length > 0 && (

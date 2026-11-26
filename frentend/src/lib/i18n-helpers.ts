@@ -10,8 +10,31 @@ import type { Category } from "./types";
 export function hreflangAlternates(path: string): Record<string, string> {
   return {
     ar: path,
-    en: `/en${path}`,
+    en: localizedPath(path, "en"),
     "x-default": path,
+  };
+}
+
+/** Prefixes a locale-less path with the English locale segment (Arabic stays
+ * unprefixed, matching routing.ts's `localePrefix: "as-needed"`). "/" becomes
+ * "/en" rather than "/en/", and query strings are preserved. */
+export function localizedPath(path: string, locale: string): string {
+  if (locale !== "en") return path;
+  if (path === "/") return "/en";
+  return `/en${path}`;
+}
+
+/** Complete `alternates` block for a page's metadata. The canonical URL MUST
+ * point at the page's own locale: a canonical that always points at the
+ * Arabic URL tells Google every /en page is a duplicate of its Arabic twin,
+ * which de-indexes the English version and wastes crawl budget. Pairing it
+ * with reciprocal hreflang links (ar / en / x-default) is what lets search
+ * engines serve each language to the right audience instead of having the two
+ * versions compete for the same keywords. */
+export function localizedAlternates(path: string, locale: string) {
+  return {
+    canonical: localizedPath(path, locale),
+    languages: hreflangAlternates(path),
   };
 }
 

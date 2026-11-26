@@ -2,6 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import type { Map as LeafletMap } from "leaflet";
 import {
   Briefcase,
@@ -28,11 +29,11 @@ export interface LocationPickResult {
 }
 
 const LOCATION_TYPES = [
-  { label: "المنزل", icon: Home },
-  { label: "المكتب", icon: Briefcase },
-  { label: "صديق", icon: Users },
-  { label: "أخرى", icon: MoreHorizontal },
-];
+  { key: "home", icon: Home },
+  { key: "office", icon: Briefcase },
+  { key: "friend", icon: Users },
+  { key: "other", icon: MoreHorizontal },
+] as const;
 
 interface Suggestion {
   lat: string;
@@ -65,6 +66,8 @@ export default function LocationPickerModal({
   onConfirm: (result: LocationPickResult) => void;
   onClose: () => void;
 }) {
+  const locale = useLocale();
+  const t = useTranslations("location");
   const mapRef = useRef<LeafletMap | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +75,7 @@ export default function LocationPickerModal({
 
   const [address, setAddress] = useState<string | null>(null);
   const [city, setCity] = useState("");
-  const [locationType, setLocationType] = useState(initialLocationType || LOCATION_TYPES[0].label);
+  const [locationType, setLocationType] = useState(initialLocationType || "home");
   const [countryCode, setCountryCode] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -137,11 +140,11 @@ export default function LocationPickerModal({
       try {
         const res = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
         const data = await res.json();
-        setAddress(data.address || "تعذّر تحديد العنوان");
+        setAddress(data.address || t("geocodeFailed"));
         setCity(data.city || "");
         setCountryCode(data.country_code || "");
       } catch {
-        setAddress("تعذّر تحديد العنوان");
+        setAddress(t("geocodeFailed"));
       } finally {
         setIsGeocoding(false);
       }
@@ -223,7 +226,7 @@ export default function LocationPickerModal({
   const canConfirm = !isGeocoding && !!address && !isOutsideSaudi && !isOutsideDeliveryArea;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white" dir="rtl">
+    <div className="fixed inset-0 z-50 bg-white" dir={locale === "en" ? "ltr" : "rtl"}>
       {/* Map — z-0 gives this its own stacking context, confining Leaflet's
           internal panes (tiles/markers/popups carry z-index up to 700) so
           they can never paint over the sibling overlay UI below, no matter
@@ -246,7 +249,7 @@ export default function LocationPickerModal({
             type="button"
             onClick={onClose}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white shadow-lg"
-            aria-label="إغلاق"
+            aria-label={t("close")}
           >
             <X className="h-5 w-5 text-navy-900" aria-hidden />
           </button>
@@ -257,7 +260,7 @@ export default function LocationPickerModal({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && searchNow()}
-                placeholder="ابحث عن حي، شارع، مكان..."
+                placeholder={t("searchPlaceholder")}
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               />
               {isSearching && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-600" aria-hidden />}
@@ -269,7 +272,7 @@ export default function LocationPickerModal({
                     key={i}
                     type="button"
                     onClick={() => selectSuggestion(s)}
-                    className="flex w-full items-start gap-2 border-b border-navy-900/5 px-3.5 py-2.5 text-right last:border-0 hover:bg-navy-900/5"
+                    className="flex w-full items-start gap-2 border-b border-navy-900/5 px-3.5 py-2.5 text-start last:border-0 hover:bg-navy-900/5"
                   >
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" aria-hidden />
                     <span className="min-w-0 flex-1 truncate text-xs text-navy-700">{s.display_name}</span>
@@ -284,7 +287,7 @@ export default function LocationPickerModal({
       {/* Zoom + my-location controls — offset high enough to clear the
           bottom panel, which grew taller once the location-type row was
           added below. */}
-      <div className="absolute left-3 bottom-[340px] z-10 flex flex-col items-center gap-2">
+      <div className="absolute end-3 bottom-[340px] z-10 flex flex-col items-center gap-2">
         <button
           type="button"
           onClick={() => zoom(1)}
@@ -317,7 +320,7 @@ export default function LocationPickerModal({
       <div className="absolute inset-x-0 bottom-0 z-10 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-[0_-4px_24px_rgba(0,0,0,0.12)]">
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-navy-900/10" />
 
-        <div className="mb-1 text-xs font-semibold text-navy-400">الموقع المحدد</div>
+        <div className="mb-1 text-xs font-semibold text-navy-400">{t("selected")}</div>
         {isGeocoding ? (
           <div className="mb-3 space-y-1.5">
             <div className="h-3.5 w-52 animate-pulse rounded bg-navy-900/10" />
@@ -326,25 +329,26 @@ export default function LocationPickerModal({
         ) : (
           <div className="mb-3 flex items-start gap-1.5">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" aria-hidden />
-            <span className="text-sm font-bold text-navy-900">{address ?? "حرّك الخريطة لتحديد موقعك"}</span>
+            <span className="text-sm font-bold text-navy-900">{address ?? t("movePrompt")}</span>
           </div>
         )}
 
         {zone && (
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
-            توصيل {zone.name}
-            {zone.base_fee === 0 && " — مجاني"}
+            {t("deliveryTo", { zone: zone.name })}
+            {zone.base_fee === 0 && t("freeSuffix")}
           </div>
         )}
 
         <div className="mb-3 grid grid-cols-4 gap-2">
-          {LOCATION_TYPES.map(({ label, icon: Icon }) => {
-            const active = locationType === label;
+          {LOCATION_TYPES.map(({ key, icon: Icon }) => {
+            const label = t(`type.${key}`);
+            const active = locationType === key || locationType === label;
             return (
               <button
-                key={label}
+                key={key}
                 type="button"
-                onClick={() => setLocationType(label)}
+                onClick={() => setLocationType(key)}
                 className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-bold transition ${
                   active
                     ? "border-brand-600 bg-brand-50 text-brand-700"
@@ -360,13 +364,13 @@ export default function LocationPickerModal({
 
         {isOutsideSaudi && (
           <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-600">
-            التوصيل متاح داخل المملكة العربية السعودية فقط
+            {t("outsideSaudi")}
           </div>
         )}
 
         {isOutsideDeliveryArea && (
           <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-600">
-            التوصيل متاح حاليًا داخل مدينة الرياض فقط — لا يمكن إتمام الطلب لهذا الموقع
+            {t("outsideDelivery")}
           </div>
         )}
 
@@ -379,10 +383,10 @@ export default function LocationPickerModal({
           }
           className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-600/25 transition disabled:cursor-not-allowed disabled:bg-navy-900/10 disabled:text-navy-300 disabled:shadow-none"
         >
-          تأكيد الموقع
+          {t("confirm")}
         </button>
         <p className="mt-2 text-center text-[10px] text-navy-300">
-          © خرائط{" "}
+          {t("mapsCredit")}{" "}
           <a
             href="https://www.openstreetmap.org/copyright"
             target="_blank"

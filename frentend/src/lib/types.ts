@@ -175,6 +175,8 @@ export interface HomeSection {
 export interface Brand {
   id: number;
   name: string;
+  /** English translation — null until an admin fills it in for this brand */
+  name_en: string | null;
   slug: string;
   image: string | null;
   count: number;

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 interface FavoritesContextValue {
   ids: number[];
@@ -38,15 +38,18 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     }
   }, [ids, hydrated]);
 
-  const toggle = (id: number) => {
-    setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
+  // A Set makes every heart button's "is this favorited?" check O(1) instead
+  // of scanning the array once per product card on the page.
+  const idSet = useMemo(() => new Set(ids), [ids]);
+  const isFavorite = useCallback((id: number) => idSet.has(id), [idSet]);
 
-  return (
-    <FavoritesContext.Provider value={{ ids, hydrated, isFavorite: (id) => ids.includes(id), toggle }}>
-      {children}
-    </FavoritesContext.Provider>
-  );
+  const toggle = useCallback((id: number) => {
+    setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+
+  const value = useMemo(() => ({ ids, hydrated, isFavorite, toggle }), [ids, hydrated, isFavorite, toggle]);
+
+  return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
 }
 
 export function useFavorites(): FavoritesContextValue {

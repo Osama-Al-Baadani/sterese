@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig } from "@/lib/api";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
+import { localizedAlternates } from "@/lib/i18n-helpers";
 
 type PolicyType = "terms" | "privacy" | "return";
 const VALID_TYPES: PolicyType[] = ["terms", "privacy", "return"];
@@ -10,19 +12,33 @@ const VALID_TYPES: PolicyType[] = ["terms", "privacy", "return"];
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ type: string }>;
+  params: Promise<{ type: string; locale: string }>;
 }): Promise<Metadata> {
-  const { type } = await params;
-  const config = await getAppConfig();
+  const { type, locale } = await params;
+  const [config, t] = await Promise.all([
+    getAppConfig(),
+    getTranslations({ locale, namespace: "pages.policies" }),
+  ]);
   const policy = VALID_TYPES.includes(type as PolicyType) ? config.policies[type as PolicyType] : null;
-  return { title: policy?.title ?? "السياسات", alternates: { canonical: `/policies/${type}` } };
+  return {
+    title: policy?.title ?? t("fallbackTitle"),
+    alternates: localizedAlternates(`/policies/${type}`, locale),
+  };
 }
 
-export default async function PolicyPage({ params }: { params: Promise<{ type: string }> }) {
-  const { type } = await params;
+export default async function PolicyPage({
+  params,
+}: {
+  params: Promise<{ type: string; locale: string }>;
+}) {
+  const { type, locale } = await params;
+  setRequestLocale(locale);
   if (!VALID_TYPES.includes(type as PolicyType)) notFound();
 
-  const config = await getAppConfig();
+  const [config, t] = await Promise.all([
+    getAppConfig(),
+    getTranslations({ locale, namespace: "pages.policies" }),
+  ]);
   const policy = config.policies[type as PolicyType];
 
   return (
@@ -31,7 +47,7 @@ export default async function PolicyPage({ params }: { params: Promise<{ type: s
       <main className="flex-1">
         <div className="mx-auto max-w-2xl px-4 py-14 sm:px-6 lg:px-8">
           {!policy ? (
-            <p className="text-navy-500">هذه الصفحة غير متوفرة حالياً.</p>
+            <p className="text-navy-500">{t("unavailable")}</p>
           ) : (
             <>
               <h1 className="mb-8 text-3xl font-extrabold text-navy-900">{policy.title}</h1>

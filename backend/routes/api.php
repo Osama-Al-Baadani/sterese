@@ -82,6 +82,7 @@ Route::post('/webhooks/woocommerce', [WooWebhookController::class, 'handle']);
 
 // ── Legacy Order Tracking ────────────────────────────────────────────────────
 Route::post('/orders/track', [OrderController::class, 'track']);
+Route::post('/orders/public-track', [OrderController::class, 'publicTrack']);
 Route::patch('/orders/track/{wooOrderId}/paid', [OrderController::class, 'markPaid']);
 
 // ── Customer Addresses ───────────────────────────────────────────────────────

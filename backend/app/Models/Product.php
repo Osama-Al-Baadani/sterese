@@ -115,11 +115,13 @@ class Product extends Model
         static::saved(function () {
             \Illuminate\Support\Facades\Cache::forget('products_list_stats_v1');
             \Illuminate\Support\Facades\Cache::forget('nav_badge_products_count');
+            \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400);
         });
 
         static::deleted(function () {
             \Illuminate\Support\Facades\Cache::forget('products_list_stats_v1');
             \Illuminate\Support\Facades\Cache::forget('nav_badge_products_count');
+            \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400);
         });
     }
 

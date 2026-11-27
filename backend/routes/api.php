@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Route;
 
 // ── Native Catalog & Coupons v2 (Authenticated via ApiKey Basic Auth) ────────
 Route::prefix('v2')->middleware(VerifyV2ApiKey::class)->group(function () {
+    Route::get('/storefront-init', [CatalogController::class, 'storefrontInit']);
     Route::get('/products', [CatalogController::class, 'products']);
     Route::get('/products/{id}', [CatalogController::class, 'product'])->whereNumber('id');
     Route::get('/categories', [CatalogController::class, 'categories']);

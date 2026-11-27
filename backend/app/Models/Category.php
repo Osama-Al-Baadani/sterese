@@ -40,6 +40,9 @@ class Category extends Model
             $rawSlug = trim((string) ($category->slug ?: ($category->name_en ?: $category->name)));
             $category->slug = static::uniqueSlug($rawSlug, $category->exists ? $category->id : null);
         });
+
+        static::saved(fn () => \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400));
+        static::deleted(fn () => \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400));
     }
 
     public static function uniqueSlug(string $raw, ?int $ignoreId = null): string

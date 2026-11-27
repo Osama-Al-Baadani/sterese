@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, PackageX, X, ZoomIn, ZoomOut } from "lucide-react";
 import type { ProductImage } from "@/lib/types";
 
@@ -17,6 +17,7 @@ export default function ProductGallery({
   const [active, setActive] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  const touchStartX = useRef<number | null>(null);
   const current = images[active];
   const count = images.length;
 
@@ -46,18 +47,41 @@ export default function ProductGallery({
     <>
       {/* dir="ltr" ensures the vertical thumbnail column always stays on the right side */}
       <div dir="ltr" className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start">
-        {/* Main Image */}
-        <div className="group relative flex-1 aspect-square overflow-hidden rounded-2xl border border-navy-900/8 bg-white shadow-xs">
-          {current ? (
-            <Image
-              src={current.src}
-              alt={name}
-              fill
-              sizes="(min-width: 1024px) 40vw, 90vw"
-              className="cursor-zoom-in object-cover transition duration-500 group-hover:scale-[1.03]"
-              onClick={() => setLightboxOpen(true)}
-              priority
-            />
+        {/* Main Image — all gallery slides stay mounted & eagerly preloaded so flipping is 0ms */}
+        <div
+          className="group relative flex-1 aspect-square overflow-hidden rounded-2xl border border-navy-900/8 bg-white shadow-xs"
+          onTouchStart={(e) => {
+            if (count > 1) touchStartX.current = e.touches[0]?.clientX ?? null;
+          }}
+          onTouchEnd={(e) => {
+            if (count <= 1 || touchStartX.current === null) return;
+            const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+            const delta = endX - touchStartX.current;
+            touchStartX.current = null;
+            if (Math.abs(delta) > 40) {
+              setActive((i) => (delta < 0 ? (i + 1) % count : (i - 1 + count) % count));
+            }
+          }}
+        >
+          {count > 0 ? (
+            images.map((img, i) => {
+              const isActive = i === active;
+              return (
+                <Image
+                  key={`${img.src}-${i}`}
+                  src={img.src}
+                  alt={isActive ? name : ""}
+                  fill
+                  priority={i === 0}
+                  loading={i === 0 ? undefined : "eager"}
+                  sizes="(min-width: 1024px) 40vw, 90vw"
+                  className={`cursor-zoom-in object-cover transition-all duration-200 group-hover:scale-[1.03] ${
+                    isActive ? "z-[1] opacity-100" : "pointer-events-none z-0 opacity-0"
+                  }`}
+                  onClick={() => setLightboxOpen(true)}
+                />
+              );
+            })
           ) : (
             <div className="flex h-full items-center justify-center text-navy-300">
               <PackageX className="h-16 w-16" aria-hidden />
@@ -65,7 +89,7 @@ export default function ProductGallery({
           )}
 
           {bundle && (
-            <span className="absolute top-3 left-3 rounded-lg bg-gradient-to-l from-emerald-600 to-emerald-500 px-2.5 py-1 text-sm font-extrabold text-white shadow-lg">
+            <span className="absolute top-3 left-3 z-10 rounded-lg bg-gradient-to-l from-emerald-600 to-emerald-500 px-2.5 py-1 text-sm font-extrabold text-white shadow-lg">
               {bundle}
             </span>
           )}
@@ -76,7 +100,7 @@ export default function ProductGallery({
               type="button"
               onClick={() => setLightboxOpen(true)}
               aria-label="Zoom image"
-              className="absolute bottom-3 left-3 flex h-11 w-11 items-center justify-center rounded-full border border-navy-900/10 bg-white/90 text-navy-900 shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-110 hover:bg-brand-500 hover:text-white"
+              className="absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-navy-900/10 bg-white/90 text-navy-900 shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-110 hover:bg-brand-500 hover:text-white"
             >
               <ZoomIn className="h-5 w-5" aria-hidden />
             </button>
@@ -89,7 +113,7 @@ export default function ProductGallery({
                 type="button"
                 onClick={() => setActive((i) => (i - 1 + count) % count)}
                 aria-label="Previous image"
-                className="absolute top-1/2 left-3 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-navy-900 shadow-md backdrop-blur-xs transition hover:scale-110 hover:bg-brand-500 hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                className="absolute top-1/2 left-3 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-navy-900 shadow-md backdrop-blur-xs transition hover:scale-110 hover:bg-brand-500 hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
               >
                 <ChevronLeft className="h-5 w-5" aria-hidden />
               </button>
@@ -97,7 +121,7 @@ export default function ProductGallery({
                 type="button"
                 onClick={() => setActive((i) => (i + 1) % count)}
                 aria-label="Next image"
-                className="absolute top-1/2 right-3 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-navy-900 shadow-md backdrop-blur-xs transition hover:scale-110 hover:bg-brand-500 hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                className="absolute top-1/2 right-3 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-navy-900 shadow-md backdrop-blur-xs transition hover:scale-110 hover:bg-brand-500 hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
               >
                 <ChevronRight className="h-5 w-5" aria-hidden />
               </button>
@@ -112,6 +136,7 @@ export default function ProductGallery({
               <button
                 key={`${img.src}-${i}`}
                 type="button"
+                onMouseEnter={() => setActive(i)}
                 onClick={() => setActive(i)}
                 className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white transition-all duration-200 sm:h-20 sm:w-20 ${
                   i === active
@@ -169,7 +194,7 @@ export default function ProductGallery({
             </div>
           </div>
 
-          {/* Lightbox Image */}
+          {/* Lightbox Image — stacked so switching inside Lightbox is also instant */}
           <div
             className="relative flex h-[78vh] w-full max-w-4xl items-center justify-center overflow-hidden"
             onClick={(e) => e.stopPropagation()}
@@ -180,14 +205,22 @@ export default function ProductGallery({
                 zoomed ? "scale-150 cursor-zoom-out" : "scale-100 cursor-zoom-in"
               }`}
             >
-              <Image
-                src={current.src}
-                alt={name}
-                fill
-                sizes="100vw"
-                className="object-contain"
-                priority
-              />
+              {images.map((img, i) => {
+                const isActive = i === active;
+                return (
+                  <Image
+                    key={`lb-main-${img.src}-${i}`}
+                    src={img.src}
+                    alt={isActive ? name : ""}
+                    fill
+                    loading="eager"
+                    sizes="100vw"
+                    className={`object-contain transition-opacity duration-150 ${
+                      isActive ? "z-[1] opacity-100" : "pointer-events-none z-0 opacity-0"
+                    }`}
+                  />
+                );
+              })}
             </div>
 
             {count > 1 && (

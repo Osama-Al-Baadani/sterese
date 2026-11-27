@@ -16,9 +16,6 @@ function one(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-// Sort/price/stock filters shouldn't fragment indexing into near-duplicate
-// pages — canonical collapses to just the category (or the bare listing),
-// which is the only distinction worth Google treating as a separate page.
 export async function generateMetadata({
   params,
   searchParams,
@@ -26,16 +23,17 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
-  const [{ locale }, sp, t] = await Promise.all([
+  const [{ locale }, sp, t, categories] = await Promise.all([
     params,
     searchParams,
     params.then(({ locale: l }) => getTranslations({ locale: l, namespace: "browse" })),
+    getCategories(),
   ]);
   const category = one(sp.category);
   const canonical = category ? `/browse?category=${category}` : "/browse";
 
   const catObj = category
-    ? (await getCategories()).find((c) => c.id === Number(category))
+    ? categories.find((c) => c.id === Number(category))
     : undefined;
   const categoryName = catObj ? localizedName(catObj, locale) : undefined;
   const keywords = [
@@ -65,9 +63,14 @@ export default async function BrowsePage({
 }) {
   const [{ locale }, sp] = await Promise.all([params, searchParams]);
   setRequestLocale(locale);
-  const [t, tNav] = await Promise.all([
+
+  // Fetch shared storefront bootstrap (categories, brands, config) in ONE call
+  const [t, tNav, categories, brands, config] = await Promise.all([
     getTranslations({ locale, namespace: "browse" }),
     getTranslations({ locale, namespace: "nav" }),
+    getCategories(),
+    getBrands(),
+    getAppConfig(),
   ]);
 
   const search = one(sp.search);
@@ -86,25 +89,17 @@ export default async function BrowsePage({
     "asc" | "desc",
   ];
 
-  const categories = await getCategories();
-
-  // Picking a parent category shows everything under it, not just products
-  // tagged directly on that parent — so the filter sent to the backend is
-  // the selected category plus every one of its descendants.
   const selectedId = category ? Number(category) : null;
   const categoryFilter =
     selectedId !== null ? descendantIds(categories, selectedId).join(",") : undefined;
 
-  // A selected category with its own subcategories groups results into one
-  // section per subcategory instead of one flat grid mixing every descendant
-  // together — only when the visit is a plain category browse.
   const directChildren =
     selectedId !== null
       ? childrenOf(categories, selectedId).filter((c) => hasProducts(categories, c.id))
       : [];
   const showGrouped = directChildren.length > 0 && !search && !brand;
 
-  const [fetched, groupedSections, brands, config] = await Promise.all([
+  const [fetched, groupedSections] = await Promise.all([
     showGrouped
       ? Promise.resolve([])
       : getProducts({
@@ -123,15 +118,10 @@ export default async function BrowsePage({
     showGrouped && selectedId !== null
       ? getCategorySections(selectedId, 8)
       : Promise.resolve([]),
-    getBrands(),
-    getAppConfig(),
   ]);
   const hasMore = fetched.length > PAGE_SIZE;
   const products = fetched.slice(0, PAGE_SIZE);
 
-  // Lets Google understand this is a product-listing page (not just a page
-  // that happens to contain products) and can surface individual items —
-  // only for the flat grid.
   const siteUrl = process.env.SITE_URL ?? "http://localhost:3000";
   const itemListSchema =
     !showGrouped && products.length > 0

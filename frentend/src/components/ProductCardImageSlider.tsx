@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, PackageX } from "lucide-react";
 import type { ProductImage } from "@/lib/types";
 
@@ -13,10 +13,14 @@ export default function ProductCardImageSlider({
   name: string;
 }) {
   const [index, setIndex] = useState(0);
-  const count = images.length;
-  const current = images[index]?.src;
+  // Preload secondary slides as soon as the user hovers or touches the card
+  const [warmed, setWarmed] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
-  if (!current) {
+  const count = images.length;
+  const primary = images[0]?.src;
+
+  if (!primary) {
     return (
       <div className="flex h-full items-center justify-center text-navy-300">
         <PackageX className="h-10 w-10" aria-hidden />
@@ -27,24 +31,60 @@ export default function ProductCardImageSlider({
   function prev(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    setWarmed(true);
     setIndex((i) => (i - 1 + count) % count);
   }
 
   function next(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    setWarmed(true);
     setIndex((i) => (i + 1) % count);
   }
 
+  const renderedImages = warmed || index > 0 ? images : images.slice(0, 1);
+
   return (
-    <>
-      <Image
-        src={current}
-        alt={name}
-        fill
-        sizes="(min-width: 1024px) 20vw, 45vw"
-        className="object-contain p-3 transition-transform duration-500 group-hover:scale-105"
-      />
+    <div
+      className="relative h-full w-full"
+      onMouseEnter={() => {
+        if (count > 1 && !warmed) setWarmed(true);
+      }}
+      onTouchStart={(e) => {
+        if (count > 1) {
+          if (!warmed) setWarmed(true);
+          touchStartX.current = e.touches[0]?.clientX ?? null;
+        }
+      }}
+      onTouchEnd={(e) => {
+        if (count <= 1 || touchStartX.current === null) return;
+        const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+        const delta = endX - touchStartX.current;
+        touchStartX.current = null;
+        if (Math.abs(delta) > 35) {
+          e.preventDefault();
+          e.stopPropagation();
+          setIndex((i) => (delta < 0 ? (i + 1) % count : (i - 1 + count) % count));
+        }
+      }}
+    >
+      {renderedImages.map((img, i) => {
+        if (!img?.src) return null;
+        const isActive = i === index;
+        return (
+          <Image
+            key={`${img.src}-${i}`}
+            src={img.src}
+            alt={isActive ? name : ""}
+            fill
+            loading={i === 0 ? undefined : "eager"}
+            sizes="(min-width: 1024px) 20vw, 45vw"
+            className={`object-contain p-3 transition-all duration-200 group-hover:scale-105 ${
+              isActive ? "z-[1] opacity-100" : "pointer-events-none z-0 opacity-0"
+            }`}
+          />
+        );
+      })}
 
       {count > 1 && (
         <>
@@ -75,6 +115,7 @@ export default function ProductCardImageSlider({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  setWarmed(true);
                   setIndex(i);
                 }}
                 className={`h-1.5 rounded-full transition-all ${
@@ -85,6 +126,6 @@ export default function ProductCardImageSlider({
           </div>
         </>
       )}
-    </>
+    </div>
   );
 }

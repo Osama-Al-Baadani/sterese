@@ -7,135 +7,356 @@ use App\Models\BrandSetting;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Product;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class CatalogController extends Controller
 {
+    /**
+     * Slim column list for product cards / carousels — skips LONGTEXT
+     * description & description_en so MySQL I/O and JSON payloads stay tiny.
+     */
+    private const LISTING_COLUMNS = [
+        'products.id',
+        'products.brand_setting_id',
+        'products.name',
+        'products.name_en',
+        'products.slug',
+        'products.sku',
+        'products.barcode',
+        'products.unit',
+        'products.bundle_qty',
+        'products.type',
+        'products.status',
+        'products.featured',
+        'products.short_description',
+        'products.short_description_en',
+        'products.price',
+        'products.regular_price',
+        'products.sale_price',
+        'products.on_sale',
+        'products.stock_status',
+        'products.stock_quantity',
+        'products.manage_stock',
+        'products.average_rating',
+        'products.rating_count',
+        'products.total_sales',
+        'products.sort_order',
+        'products.images',
+        'products.related_product_ids',
+        'products.created_at',
+    ];
+
+    private function cacheVersion(): string
+    {
+        return (string) Cache::get('catalog_cache_ver', 'v1');
+    }
+
+    /**
+     * Base eager-loaded listing query.
+     */
+    private function baseListingQuery(): Builder
+    {
+        return Product::query()
+            ->select(self::LISTING_COLUMNS)
+            ->with([
+                'categories:id,name,name_en,slug',
+                'tags:id,name,name_en,slug',
+                'brand',
+                'variations',
+            ])
+            ->where('products.status', 'publish');
+    }
+
+    /**
+     * GET /api/v2/storefront-init
+     * Single unified, cached bootstrap payload for Next.js (AppConfig + Categories +
+     * Brands + HomeDepartments + HomeSections with resolved products).
+     * Eliminates 12-15 sequential/parallel HTTP round-trips on page refresh.
+     */
+    public function storefrontInit(): JsonResponse
+    {
+        $ver = $this->cacheVersion();
+
+        $payload = Cache::remember("api_v2_storefront_init:{$ver}", 180, function () {
+            $appConfig = app(AppConfigController::class)->index()->getData(true);
+            $categories = $this->computeCategories();
+            $brands = $this->computeBrands();
+            $departmentsData = app(HomeDepartmentController::class)->index()->getData(true);
+            $sectionsData = app(HomeSectionController::class)->index()->getData(true);
+
+            $rawSections = $sectionsData['sections'] ?? [];
+            $sectionsWithProducts = [];
+
+            foreach ($rawSections as $sec) {
+                $products = $this->resolveHomeSectionProducts($sec);
+                $sectionsWithProducts[] = [
+                    'section'  => $sec,
+                    'products' => $products,
+                ];
+            }
+
+            // Fallback when no curated home sections have products: one row per non-empty root category
+            $hasAnyProducts = collect($sectionsWithProducts)->contains(fn ($s) => !empty($s['products']));
+            if (!$hasAnyProducts) {
+                $sectionsWithProducts = [];
+                foreach ($categories as $cat) {
+                    if (($cat['parent'] ?? 0) !== 0) {
+                        continue;
+                    }
+                    $catId = (int) $cat['id'];
+                    $fallbackSec = [
+                        'id'              => -$catId,
+                        'title'           => $cat['name'],
+                        'icon'            => '',
+                        'source_type'     => 'category',
+                        'source_id'       => $catId,
+                        'source_ids'      => [$catId],
+                        'product_ids'     => [],
+                        'products_limit'  => 12,
+                        'banner_url'      => '',
+                        'banner_link'     => '',
+                        'banner_url_web'  => '',
+                        'banner_link_web' => '',
+                        'banners'         => [],
+                        'banners_web'     => [],
+                    ];
+                    $products = $this->resolveHomeSectionProducts($fallbackSec);
+                    if (!empty($products)) {
+                        $sectionsWithProducts[] = [
+                            'section'  => $fallbackSec,
+                            'products' => $products,
+                        ];
+                    }
+                }
+            }
+
+            return [
+                'appConfig'            => $appConfig,
+                'categories'           => $categories,
+                'brands'               => $brands,
+                'departments'          => $departmentsData['departments'] ?? [],
+                'sectionsWithProducts' => $sectionsWithProducts,
+            ];
+        });
+
+        return response()->json($payload);
+    }
+
+    private function resolveHomeSectionProducts(array $section): array
+    {
+        $limit = min(max((int) ($section['products_limit'] ?? 12), 1), 40);
+        $productIds = array_values(array_filter(array_map('intval', $section['product_ids'] ?? []), fn ($id) => $id > 0));
+
+        $query = $this->baseListingQuery()->where('products.stock_status', 'instock');
+
+        if (!empty($productIds)) {
+            $query->whereIn('products.id', $productIds);
+        } else {
+            $sourceType = (string) ($section['source_type'] ?? '');
+            $sourceIds = array_values(array_filter(array_map('intval', $section['source_ids'] ?? []), fn ($id) => $id > 0));
+
+            switch ($sourceType) {
+                case 'category':
+                    if (empty($sourceIds)) {
+                        return [];
+                    }
+                    $catIds = $this->expandDescendantCategoryIds($sourceIds);
+                    $query->whereExists(function ($q) use ($catIds) {
+                        $q->select(DB::raw(1))
+                            ->from('product_category')
+                            ->whereColumn('product_category.product_id', 'products.id')
+                            ->whereIn('product_category.category_id', $catIds);
+                    });
+                    break;
+
+                case 'tag':
+                    if (empty($sourceIds)) {
+                        return [];
+                    }
+                    $query->whereExists(function ($q) use ($sourceIds) {
+                        $q->select(DB::raw(1))
+                            ->from('product_tag')
+                            ->whereColumn('product_tag.product_id', 'products.id')
+                            ->whereIn('product_tag.tag_id', $sourceIds);
+                    });
+                    break;
+
+                case 'bestsellers':
+                    break;
+
+                case 'featured':
+                    $query->where('products.featured', true);
+                    break;
+
+                default:
+                    return [];
+            }
+        }
+
+        return $query
+            ->orderBy('products.total_sales', 'desc')
+            ->orderBy('products.sort_order', 'desc')
+            ->orderBy('products.id', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Product $p) => $p->toApiArray(false))
+            ->values()
+            ->all();
+    }
+
     /**
      * GET /api/v2/products  &  GET /api/products
      */
     public function products(Request $request): JsonResponse
     {
-        $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
-        $page    = max((int) $request->query('page', 1), 1);
-        $orderby = (string) $request->query('orderby', 'popularity');
-        $order   = strtolower((string) $request->query('order', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $hasSearch = $request->filled('search');
+        $ver = $this->cacheVersion();
 
-        $query = Product::query()
-            ->with(['categories', 'tags', 'brand'])
-            ->where('status', 'publish');
+        $compute = function () use ($request): array {
+            $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
+            $page    = max((int) $request->query('page', 1), 1);
+            $orderby = (string) $request->query('orderby', 'popularity');
+            $order   = strtolower((string) $request->query('order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        // Filter by specific IDs (?include=1,5,9)
-        if ($request->filled('include')) {
-            $ids = $this->parseIntList((string) $request->query('include'));
-            if (empty($ids)) {
-                return response()->json([]);
+            $query = $this->baseListingQuery();
+
+            // Filter by specific IDs (?include=1,5,9)
+            if ($request->filled('include')) {
+                $ids = $this->parseIntList((string) $request->query('include'));
+                if (empty($ids)) {
+                    return [];
+                }
+                $query->whereIn('products.id', $ids);
             }
-            $query->whereIn('id', $ids);
-        }
 
-        // Filter by categories (?category=3,7,12) — includes all nested child/descendant categories automatically
-        if ($request->filled('category')) {
-            $catIds = $this->expandDescendantCategoryIds(
-                $this->parseIntList((string) $request->query('category'))
-            );
-            if (!empty($catIds)) {
-                $query->whereHas('categories', fn ($q) => $q->whereIn('categories.id', $catIds));
+            // Filter by categories (?category=3,7,12) — direct pivot lookup (no extra join)
+            if ($request->filled('category')) {
+                $catIds = $this->expandDescendantCategoryIds(
+                    $this->parseIntList((string) $request->query('category'))
+                );
+                if (!empty($catIds)) {
+                    $query->whereExists(function ($q) use ($catIds) {
+                        $q->select(DB::raw(1))
+                            ->from('product_category')
+                            ->whereColumn('product_category.product_id', 'products.id')
+                            ->whereIn('product_category.category_id', $catIds);
+                    });
+                }
             }
-        }
 
-        // Filter by tags (?tag=2,4)
-        if ($request->filled('tag')) {
-            $tagIds = $this->parseIntList((string) $request->query('tag'));
-            if (!empty($tagIds)) {
-                $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tagIds));
+            // Filter by tags (?tag=2,4) — direct pivot lookup
+            if ($request->filled('tag')) {
+                $tagIds = $this->parseIntList((string) $request->query('tag'));
+                if (!empty($tagIds)) {
+                    $query->whereExists(function ($q) use ($tagIds) {
+                        $q->select(DB::raw(1))
+                            ->from('product_tag')
+                            ->whereColumn('product_tag.product_id', 'products.id')
+                            ->whereIn('product_tag.tag_id', $tagIds);
+                    });
+                }
             }
-        }
 
-        // Filter by brand (?pwb-brand=nivea or ?brand=nivea or brand ID)
-        $brandParam = $request->query('pwb-brand', $request->query('brand'));
-        if ($brandParam !== null && $brandParam !== '') {
-            $brands = array_values(array_filter(array_map('trim', explode(',', (string) $brandParam))));
-            if (!empty($brands)) {
-                $query->whereHas('brand', function ($q) use ($brands) {
+            // Filter by brand (?pwb-brand=nivea or ?brand=nivea or brand ID)
+            $brandParam = $request->query('pwb-brand', $request->query('brand'));
+            if ($brandParam !== null && $brandParam !== '') {
+                $brands = array_values(array_filter(array_map('trim', explode(',', (string) $brandParam))));
+                if (!empty($brands)) {
                     $ids = array_values(array_filter($brands, 'is_numeric'));
                     $slugs = array_values(array_filter($brands, fn ($b) => !is_numeric($b)));
-                    $q->where(function ($sub) use ($ids, $slugs) {
-                        if (!empty($ids)) {
-                            $sub->orWhereIn('brand_settings.id', array_map('intval', $ids));
-                        }
-                        if (!empty($slugs)) {
-                            $sub->orWhereIn('brand_settings.slug', $slugs);
-                        }
+                    $matchedBrandIds = BrandSetting::query()
+                        ->where(function ($sub) use ($ids, $slugs) {
+                            if (!empty($ids)) {
+                                $sub->orWhereIn('id', array_map('intval', $ids));
+                            }
+                            if (!empty($slugs)) {
+                                $sub->orWhereIn('slug', $slugs);
+                            }
+                        })
+                        ->pluck('id')
+                        ->all();
+
+                    if (empty($matchedBrandIds)) {
+                        return [];
+                    }
+                    $query->whereIn('products.brand_setting_id', $matchedBrandIds);
+                }
+            }
+
+            // Search across Arabic/English name, SKU, barcode, descriptions, and category names
+            if ($request->filled('search')) {
+                $term = trim((string) $request->query('search'));
+                if ($term !== '') {
+                    $query->where(function ($q) use ($term) {
+                        $q->where('products.name', 'like', "%{$term}%")
+                            ->orWhere('products.name_en', 'like', "%{$term}%")
+                            ->orWhere('products.sku', 'like', "%{$term}%")
+                            ->orWhere('products.barcode', 'like', "%{$term}%")
+                            ->orWhere('products.short_description', 'like', "%{$term}%")
+                            ->orWhere('products.short_description_en', 'like', "%{$term}%")
+                            ->orWhereHas('categories', fn ($cq) => $cq
+                                ->where('categories.name', 'like', "%{$term}%")
+                                ->where('categories.name_en', 'like', "%{$term}%"));
                     });
-                });
+                }
             }
-        }
 
-        // Search across Arabic/English name, SKU, barcode, descriptions, and category names
-        if ($request->filled('search')) {
-            $term = trim((string) $request->query('search'));
-            if ($term !== '') {
-                $query->where(function ($q) use ($term) {
-                    $q->where('name', 'like', "%{$term}%")
-                        ->orWhere('name_en', 'like', "%{$term}%")
-                        ->orWhere('sku', 'like', "%{$term}%")
-                        ->orWhere('barcode', 'like', "%{$term}%")
-                        ->orWhere('short_description', 'like', "%{$term}%")
-                        ->orWhere('short_description_en', 'like', "%{$term}%")
-                        ->orWhereHas('categories', fn ($cq) => $cq
-                            ->where('categories.name', 'like', "%{$term}%")
-                            ->orWhere('categories.name_en', 'like', "%{$term}%"));
-                });
+            if ($request->filled('sku')) {
+                $query->where('products.sku', (string) $request->query('sku'));
             }
-        }
 
-        if ($request->filled('sku')) {
-            $query->where('sku', (string) $request->query('sku'));
-        }
+            if (filter_var($request->query('on_sale'), FILTER_VALIDATE_BOOLEAN)) {
+                $query->where('products.on_sale', true);
+            }
 
-        if (filter_var($request->query('on_sale'), FILTER_VALIDATE_BOOLEAN)) {
-            $query->where('on_sale', true);
-        }
+            if (filter_var($request->query('featured'), FILTER_VALIDATE_BOOLEAN)) {
+                $query->where('products.featured', true);
+            }
 
-        if (filter_var($request->query('featured'), FILTER_VALIDATE_BOOLEAN)) {
-            $query->where('featured', true);
-        }
+            if ($request->filled('min_price') && is_numeric($request->query('min_price'))) {
+                $query->where('products.price', '>=', (float) $request->query('min_price'));
+            }
 
-        if ($request->filled('min_price') && is_numeric($request->query('min_price'))) {
-            $query->where('price', '>=', (float) $request->query('min_price'));
-        }
+            if ($request->filled('max_price') && is_numeric($request->query('max_price'))) {
+                $query->where('products.price', '<=', (float) $request->query('max_price'));
+            }
 
-        if ($request->filled('max_price') && is_numeric($request->query('max_price'))) {
-            $query->where('price', '<=', (float) $request->query('max_price'));
-        }
+            if ($request->filled('stock_status')) {
+                $query->where('products.stock_status', (string) $request->query('stock_status'));
+            } else {
+                $query->orderByRaw("CASE WHEN products.stock_status = 'instock' THEN 0 ELSE 1 END ASC");
+            }
 
-        if ($request->filled('stock_status')) {
-            $query->where('stock_status', (string) $request->query('stock_status'));
-        } else {
-            // Keep in-stock products ahead of out-of-stock products in general listings
-            $query->orderByRaw("CASE WHEN stock_status = 'instock' THEN 0 ELSE 1 END ASC");
-        }
+            match ($orderby) {
+                'price'      => $query->orderBy('products.price', $order),
+                'date'       => $query->orderBy('products.created_at', $order),
+                'sort_order' => $query->orderBy('products.sort_order', $order)->orderBy('products.id', 'desc'),
+                default      => $query->orderBy('products.total_sales', $order)->orderBy('products.sort_order', 'desc')->orderBy('products.id', 'desc'),
+            };
 
-        match ($orderby) {
-            'price'      => $query->orderBy('price', $order),
-            'date'       => $query->orderBy('created_at', $order),
-            'sort_order' => $query->orderBy('sort_order', $order)->orderBy('id', 'desc'),
-            default      => $query->orderBy('total_sales', $order)->orderBy('sort_order', 'desc')->orderBy('id', 'desc'),
+            return $query
+                ->forPage($page, $perPage)
+                ->get()
+                ->map(fn (Product $p) => $p->toApiArray(false))
+                ->values()
+                ->all();
         };
 
-        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        if ($hasSearch) {
+            return response()->json($compute());
+        }
 
-        $items = collect($paginator->items())
-            ->map(fn (Product $p) => $p->toApiArray(false))
-            ->values()
-            ->all();
+        $queryParams = $request->query();
+        ksort($queryParams);
+        $cacheKey = "api_v2_products:{$ver}:" . md5(http_build_query($queryParams));
 
-        return response()->json($items)
-            ->header('X-WP-Total', (string) $paginator->total())
-            ->header('X-WP-TotalPages', (string) $paginator->lastPage());
+        $items = Cache::remember($cacheKey, 180, $compute);
+
+        return response()->json($items);
     }
 
     /**
@@ -143,15 +364,21 @@ class CatalogController extends Controller
      */
     public function product(int $id): JsonResponse
     {
-        $product = Product::with(['categories', 'tags', 'brand', 'variations'])
-            ->where('status', 'publish')
-            ->find($id);
+        $ver = $this->cacheVersion();
 
-        if (!$product) {
+        $payload = Cache::remember("api_v2_product:{$ver}:{$id}", 180, function () use ($id) {
+            $product = Product::with(['categories:id,name,name_en,slug', 'tags:id,name,name_en,slug', 'brand', 'variations'])
+                ->where('status', 'publish')
+                ->find($id);
+
+            return $product ? $product->toApiArray(true) : null;
+        });
+
+        if (!$payload) {
             return response()->json(['message' => 'المنتج غير موجود'], 404);
         }
 
-        return response()->json($product->toApiArray(true));
+        return response()->json($payload);
     }
 
     /**
@@ -159,7 +386,14 @@ class CatalogController extends Controller
      */
     public function categories(): JsonResponse
     {
-        $categories = Cache::remember('api_v2_categories', 180, function () {
+        return response()->json($this->computeCategories());
+    }
+
+    private function computeCategories(): array
+    {
+        $ver = $this->cacheVersion();
+
+        return Cache::remember("api_v2_categories:{$ver}", 300, function () {
             return Category::query()
                 ->where('is_active', true)
                 ->withCount([
@@ -172,8 +406,6 @@ class CatalogController extends Controller
                 ->values()
                 ->all();
         });
-
-        return response()->json($categories);
     }
 
     /**
@@ -189,7 +421,9 @@ class CatalogController extends Controller
             return response()->json([]);
         }
 
-        $sections = Cache::remember("api_v2_category_sections:{$parentId}:{$limit}", 120, function () use ($parentId, $limit) {
+        $ver = $this->cacheVersion();
+
+        $sections = Cache::remember("api_v2_category_sections:{$ver}:{$parentId}:{$limit}", 180, function () use ($parentId, $limit) {
             $children = Category::query()
                 ->where('is_active', true)
                 ->where('parent_id', $parentId)
@@ -201,7 +435,6 @@ class CatalogController extends Controller
                 return [];
             }
 
-            // Map each direct child -> all descendant category IDs (including itself)
             $childDescendantMap = [];
             $allCatIds = [];
             foreach ($children as $child) {
@@ -212,19 +445,22 @@ class CatalogController extends Controller
                 }
             }
 
-            // Fetch all matching published products across the entire parent tree in ONE query
-            $products = Product::query()
-                ->with(['categories', 'tags', 'brand'])
-                ->where('status', 'publish')
-                ->whereHas('categories', fn ($q) => $q->whereIn('categories.id', array_keys($allCatIds)))
-                ->orderByRaw("CASE WHEN stock_status = 'instock' THEN 0 ELSE 1 END ASC")
-                ->orderBy('total_sales', 'desc')
-                ->orderBy('sort_order', 'desc')
-                ->orderBy('id', 'desc')
+            $catIdList = array_keys($allCatIds);
+
+            $products = $this->baseListingQuery()
+                ->whereExists(function ($q) use ($catIdList) {
+                    $q->select(DB::raw(1))
+                        ->from('product_category')
+                        ->whereColumn('product_category.product_id', 'products.id')
+                        ->whereIn('product_category.category_id', $catIdList);
+                })
+                ->orderByRaw("CASE WHEN products.stock_status = 'instock' THEN 0 ELSE 1 END ASC")
+                ->orderBy('products.total_sales', 'desc')
+                ->orderBy('products.sort_order', 'desc')
+                ->orderBy('products.id', 'desc')
                 ->limit(max(count($children) * $limit * 2, 120))
                 ->get();
 
-            // Pre-serialize each product once so products shared across two subcategories aren't serialized twice
             $serializedById = [];
             foreach ($products as $p) {
                 $serializedById[$p->id] = $p->toApiArray(false);
@@ -265,7 +501,14 @@ class CatalogController extends Controller
      */
     public function brands(): JsonResponse
     {
-        $brands = Cache::remember('api_v2_brands', 180, function () {
+        return response()->json($this->computeBrands());
+    }
+
+    private function computeBrands(): array
+    {
+        $ver = $this->cacheVersion();
+
+        return Cache::remember("api_v2_brands:{$ver}", 300, function () {
             return BrandSetting::query()
                 ->where('is_active', true)
                 ->withCount([
@@ -282,8 +525,6 @@ class CatalogController extends Controller
                 ->values()
                 ->all();
         });
-
-        return response()->json($brands);
     }
 
     /**
@@ -307,7 +548,8 @@ class CatalogController extends Controller
     }
 
     /**
-     * Expands parent category IDs to include all nested child/descendant category IDs.
+     * Expands parent category IDs in-memory using a cached parent->children index
+     * (zero per-request SQL queries).
      *
      * @param  int[]  $seedIds
      * @return int[]
@@ -318,23 +560,33 @@ class CatalogController extends Controller
             return [];
         }
 
+        $ver = $this->cacheVersion();
+        $childrenByParent = Cache::remember("api_cat_children_map:{$ver}", 600, function () {
+            $rows = Category::query()->select(['id', 'parent_id'])->get();
+            $map = [];
+            foreach ($rows as $r) {
+                $pid = (int) ($r->parent_id ?? 0);
+                if ($pid > 0) {
+                    $map[$pid][] = (int) $r->id;
+                }
+            }
+            return $map;
+        });
+
         $all = array_fill_keys($seedIds, true);
         $frontier = $seedIds;
 
-        for ($depth = 0; $depth < 6 && !empty($frontier); $depth++) {
-            $children = Category::query()
-                ->whereIn('parent_id', $frontier)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-
-            $frontier = [];
-            foreach ($children as $childId) {
-                if (!isset($all[$childId])) {
-                    $all[$childId] = true;
-                    $frontier[] = $childId;
+        for ($depth = 0; $depth < 8 && !empty($frontier); $depth++) {
+            $nextFrontier = [];
+            foreach ($frontier as $parentId) {
+                foreach ($childrenByParent[$parentId] ?? [] as $childId) {
+                    if (!isset($all[$childId])) {
+                        $all[$childId] = true;
+                        $nextFrontier[] = $childId;
+                    }
                 }
             }
+            $frontier = $nextFrontier;
         }
 
         return array_keys($all);

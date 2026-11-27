@@ -40,33 +40,71 @@ const EMPTY_APP_CONFIG: AppConfig = {
   productQtyLimits: {},
 };
 
+function normalizeAppConfig(data: Record<string, unknown> | null | undefined): AppConfig {
+  if (!data) return EMPTY_APP_CONFIG;
+  return {
+    webCarouselBanners: (data.webCarouselBanners as AppConfig["webCarouselBanners"]) ?? [],
+    gridTileBanners: (data.gridTileBanners as AppConfig["gridTileBanners"]) ?? [],
+    gridStackBanners: (data.gridStackBanners as AppConfig["gridStackBanners"]) ?? [],
+    promoCards: (data.promoCards as AppConfig["promoCards"]) ?? [],
+    promoBottomCards: (data.promoBottomCards as AppConfig["promoBottomCards"]) ?? [],
+    storeSettings: { ...DEFAULT_STORE_SETTINGS, ...(data.storeSettings as Partial<StoreSettings>) },
+    deliveryZones: (data.deliveryZones as AppConfig["deliveryZones"]) ?? [],
+    faqs: (data.faqs as AppConfig["faqs"]) ?? [],
+    policies: (data.policies as AppConfig["policies"]) ?? {},
+    productQtyLimits: (data.productQtyLimits as AppConfig["productQtyLimits"]) ?? {},
+  };
+}
+
+export interface StorefrontInitPayload {
+  appConfig: AppConfig;
+  categories: Category[];
+  brands: Brand[];
+  departments: HomeDepartment[];
+  sectionsWithProducts: { section: HomeSection; products: Product[] }[];
+}
+
 /**
- * The site is only as good as the admin-managed content behind it, but it
- * still has to render something reasonable if the backend is briefly
- * unreachable (e.g. a deploy in progress) — every read here fails soft
- * into an empty/default shape instead of crashing the page.
+ * Single unified bootstrap fetch — grabs appConfig, categories, brands,
+ * departments, and resolved homepage product sections in ONE request instead
+ * of 12-15 round-trips. Shared across Header, Footer, Metadata, Home, and Browse.
  */
-export const getAppConfig = cache(async (): Promise<AppConfig> => {
+export const getStorefrontInit = cache(async (): Promise<StorefrontInitPayload | null> => {
   try {
-    const data = await backendFetch<Record<string, unknown>>("app-config", { revalidate: 120 });
+    const raw = await backendFetch<{
+      appConfig?: Record<string, unknown>;
+      categories?: Category[];
+      brands?: Brand[];
+      departments?: HomeDepartment[];
+      sectionsWithProducts?: { section: HomeSection; products: Product[] }[];
+    }>("v2/storefront-init", { v2Auth: true, revalidate: 180 });
+
     return {
-      webCarouselBanners: (data.webCarouselBanners as AppConfig["webCarouselBanners"]) ?? [],
-      gridTileBanners: (data.gridTileBanners as AppConfig["gridTileBanners"]) ?? [],
-      gridStackBanners: (data.gridStackBanners as AppConfig["gridStackBanners"]) ?? [],
-      promoCards: (data.promoCards as AppConfig["promoCards"]) ?? [],
-      promoBottomCards: (data.promoBottomCards as AppConfig["promoBottomCards"]) ?? [],
-      storeSettings: { ...DEFAULT_STORE_SETTINGS, ...(data.storeSettings as Partial<StoreSettings>) },
-      deliveryZones: (data.deliveryZones as AppConfig["deliveryZones"]) ?? [],
-      faqs: (data.faqs as AppConfig["faqs"]) ?? [],
-      policies: (data.policies as AppConfig["policies"]) ?? {},
-      productQtyLimits: (data.productQtyLimits as AppConfig["productQtyLimits"]) ?? {},
+      appConfig: normalizeAppConfig(raw.appConfig),
+      categories: Array.isArray(raw.categories) ? raw.categories : [],
+      brands: Array.isArray(raw.brands) ? raw.brands : [],
+      departments: Array.isArray(raw.departments) ? raw.departments.filter((d) => d.id > 0) : [],
+      sectionsWithProducts: Array.isArray(raw.sectionsWithProducts) ? raw.sectionsWithProducts : [],
     };
+  } catch {
+    return null;
+  }
+});
+
+export const getAppConfig = cache(async (): Promise<AppConfig> => {
+  const init = await getStorefrontInit();
+  if (init) return init.appConfig;
+  try {
+    const data = await backendFetch<Record<string, unknown>>("app-config", { revalidate: 180 });
+    return normalizeAppConfig(data);
   } catch {
     return EMPTY_APP_CONFIG;
   }
 });
 
 export const getCategories = cache(async (): Promise<Category[]> => {
+  const init = await getStorefrontInit();
+  if (init && init.categories.length > 0) return init.categories;
   try {
     const data = await backendFetch<Category[]>("v2/categories", { v2Auth: true, revalidate: 300 });
     return Array.isArray(data) ? data : [];
@@ -76,6 +114,8 @@ export const getCategories = cache(async (): Promise<Category[]> => {
 });
 
 export const getBrands = cache(async (): Promise<Brand[]> => {
+  const init = await getStorefrontInit();
+  if (init && init.brands.length > 0) return init.brands;
   try {
     const data = await backendFetch<Brand[]>("v2/brands", { v2Auth: true, revalidate: 300 });
     return Array.isArray(data) ? data : [];
@@ -84,11 +124,11 @@ export const getBrands = cache(async (): Promise<Brand[]> => {
   }
 });
 
-// Empty result means no admin curation yet — the homepage department grid
-// falls back to root categories only.
 export const getHomeDepartments = cache(async (): Promise<HomeDepartment[]> => {
+  const init = await getStorefrontInit();
+  if (init) return init.departments;
   try {
-    const data = await backendFetch<{ departments: HomeDepartment[] }>("home-departments", { revalidate: 120 });
+    const data = await backendFetch<{ departments: HomeDepartment[] }>("home-departments", { revalidate: 180 });
     const list = data.departments ?? [];
     return list.filter((d) => d.id > 0);
   } catch {
@@ -96,12 +136,9 @@ export const getHomeDepartments = cache(async (): Promise<HomeDepartment[]> => {
   }
 });
 
-// Same admin-curated homepage blocks already live in the app — a product
-// carousel per section (category/tag/bestsellers/featured), each with its
-// own optional banner.
 export const getHomeSections = cache(async (): Promise<HomeSection[]> => {
   try {
-    const data = await backendFetch<{ sections: HomeSection[] }>("home-sections", { revalidate: 120 });
+    const data = await backendFetch<{ sections: HomeSection[] }>("home-sections", { revalidate: 180 });
     return data.sections ?? [];
   } catch {
     return [];
@@ -114,7 +151,7 @@ export const getCategorySections = cache(
       const data = await backendFetch<{ category: Category; products: Product[] }[]>("v2/category-sections", {
         v2Auth: true,
         query: { parent_id: parentId, per_page: perPage },
-        revalidate: 120,
+        revalidate: 180,
       });
       return Array.isArray(data) ? data : [];
     } catch {
@@ -123,15 +160,6 @@ export const getCategorySections = cache(
   },
 );
 
-/** Resolves a home section's actual product list — a manual product_ids
- * pick always wins (matches the admin form: it's only offered as an
- * override on top of category/tag sources), otherwise falls back to the
- * section's source_type. A category source expands to its descendants too
- * (same rule as /browse) — a parent category picked here otherwise shows
- * nothing, since products sit on its leaf children. Out-of-stock products
- * are excluded outright here (unlike /browse, which still lists them, just
- * pushed last) — the homepage is a curated shop-window, not a search
- * result, so there's no reason to promote something a customer can't buy. */
 export async function getHomeSectionProducts(section: HomeSection, categories: Category[]): Promise<Product[]> {
   if (section.product_ids.length > 0) {
     return getProducts({ include: section.product_ids.join(","), perPage: section.products_limit, inStockOnly: true });
@@ -167,8 +195,6 @@ export interface ProductFilters {
   tag?: string;
   brand?: string;
   search?: string;
-  /** Comma-separated product IDs — restricts results to exactly these
-   * products (e.g. for rendering a saved favorites list). */
   include?: string;
   orderby?: "popularity" | "date" | "price" | "sort_order";
   order?: "asc" | "desc";
@@ -179,8 +205,6 @@ export interface ProductFilters {
   inStockOnly?: boolean;
   page?: number;
   perPage?: number;
-  /** Bypass every cache layer — used where stale prices/stock would mislead
-   * the customer (cart price & availability sync). */
   fresh?: boolean;
 }
 
@@ -204,8 +228,7 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
         page: filters.page ?? 1,
         per_page: filters.perPage ?? 24,
       },
-      // Search results change often and are cheap to refetch — skip ISR caching for them.
-      revalidate: filters.search || filters.fresh ? false : 120,
+      revalidate: filters.search || filters.fresh ? false : 180,
     });
     return Array.isArray(data) ? data : [];
   } catch {
@@ -215,7 +238,7 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
 
 export const getProduct = cache(async (id: number): Promise<Product | null> => {
   try {
-    return await backendFetch<Product>(`v2/products/${id}`, { v2Auth: true, revalidate: 120 });
+    return await backendFetch<Product>(`v2/products/${id}`, { v2Auth: true, revalidate: 180 });
   } catch {
     const fallback = await getProducts({ include: String(id), perPage: 1 });
     return fallback.find((p) => p.id === id) ?? null;

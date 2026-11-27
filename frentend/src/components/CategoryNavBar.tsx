@@ -25,10 +25,10 @@ export default function CategoryNavBar({ categories, locale }: { categories: Cat
       onMouseLeave={() => setOpenId(null)}
     >
       <div className="mx-auto flex max-w-7xl items-center gap-5 px-4 py-2.5 text-sm font-semibold text-navy-700 sm:px-6 lg:px-8">
-        <Link href="/" className="whitespace-nowrap transition hover:text-brand-700">
+        <Link href="/" prefetch={true} className="whitespace-nowrap transition hover:text-brand-700">
           {t("home")}
         </Link>
-        <Link href="/browse" className="whitespace-nowrap transition hover:text-brand-700">
+        <Link href="/browse" prefetch={true} className="whitespace-nowrap transition hover:text-brand-700">
           {t("allDepartments")}
         </Link>
 
@@ -38,6 +38,7 @@ export default function CategoryNavBar({ categories, locale }: { categories: Cat
             <div key={root.id} className="shrink-0" onMouseEnter={() => setOpenId(root.id)}>
               <Link
                 href={`/browse?category=${root.id}`}
+                prefetch={true}
                 className={`flex items-center gap-1 whitespace-nowrap py-1 transition hover:text-brand-700 ${openId === root.id ? "text-brand-700" : ""
                   }`}
               >
@@ -63,6 +64,7 @@ export default function CategoryNavBar({ categories, locale }: { categories: Cat
                 <div key={kid.id}>
                   <Link
                     href={`/browse?category=${kid.id}`}
+                    prefetch={true}
                     className="mb-2 block font-bold text-navy-900 transition hover:text-brand-700"
                   >
                     {localizedName(kid, locale)}
@@ -70,7 +72,7 @@ export default function CategoryNavBar({ categories, locale }: { categories: Cat
                   <ul className="space-y-1.5 text-sm text-navy-500">
                     {grandkids.map((gk) => (
                       <li key={gk.id}>
-                        <Link href={`/browse?category=${gk.id}`} className="transition hover:text-brand-700">
+                        <Link href={`/browse?category=${gk.id}`} prefetch={true} className="transition hover:text-brand-700">
                           {localizedName(gk, locale)}
                         </Link>
                       </li>

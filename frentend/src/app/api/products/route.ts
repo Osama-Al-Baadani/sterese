@@ -23,8 +23,9 @@ export async function GET(req: NextRequest) {
   const maxPriceRaw = sp.get("max_price");
   const minPrice = minPriceRaw && !Number.isNaN(Number(minPriceRaw)) ? Number(minPriceRaw) : undefined;
   const maxPrice = maxPriceRaw && !Number.isNaN(Number(maxPriceRaw)) ? Number(maxPriceRaw) : undefined;
+  const search = sp.get("search") ?? undefined;
   const products = await getProducts({
-    search: sp.get("search") ?? undefined,
+    search,
     category: sp.get("category") ?? undefined,
     brand: sp.get("brand") ?? undefined,
     tag: sp.get("tag") ?? undefined,
@@ -36,5 +37,10 @@ export async function GET(req: NextRequest) {
     page: Number(sp.get("page") ?? "1") || 1,
     perPage: Number(sp.get("per_page") ?? "24") || 24,
   });
-  return NextResponse.json(products);
+  return NextResponse.json(
+    products,
+    search
+      ? undefined
+      : { headers: { "Cache-Control": "public, max-age=60, s-maxage=120, stale-while-revalidate=600" } },
+  );
 }

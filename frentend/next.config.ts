@@ -5,6 +5,15 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  experimental: {
+    // Keep prefetched and visited pages in the client router cache so
+    // clicking categories/products or pressing Back opens instantaneously
+    // without re-fetching or flashing.
+    staleTimes: {
+      dynamic: 180,
+      static: 300,
+    },
+  },
   images: {
     unoptimized: process.env.NODE_ENV === "development",
     dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",

@@ -31,6 +31,7 @@ export default async function CategoryGrid({ items }: { items: DeptItem[] }) {
 
           <Link
             href="/browse"
+            prefetch={true}
             className="inline-flex items-center gap-1 rounded-full border border-navy-900/10 bg-white px-4 py-1.5 text-xs font-extrabold text-navy-800 shadow-xs transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 sm:text-sm"
           >
             {t("seeAll")}

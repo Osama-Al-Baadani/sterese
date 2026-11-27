@@ -108,6 +108,7 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
               <Link
                 key={`${item.isTag ? "tag" : "cat"}-${item.id}`}
                 href={item.isTag ? `/browse?tag=${item.id}` : `/browse?category=${item.id}`}
+                prefetch={true}
                 draggable={false}
                 onClick={(e) => {
                   if (dragState.current.moved) {

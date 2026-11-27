@@ -64,6 +64,7 @@ export default function MobileCategoriesMenu({
                     <Link
                       key={root.id}
                       href={`/browse?category=${root.id}`}
+                      prefetch={true}
                       onClick={() => setOpen(false)}
                       className="block rounded-xl px-3 py-3 text-sm font-bold text-navy-900 hover:bg-navy-900/5"
                     >
@@ -74,7 +75,7 @@ export default function MobileCategoriesMenu({
                 return (
                   <details key={root.id} className="group">
                     <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl px-3 py-3 text-sm font-bold text-navy-900 hover:bg-navy-900/5">
-                      <Link href={`/browse?category=${root.id}`} onClick={() => setOpen(false)}>
+                      <Link href={`/browse?category=${root.id}`} prefetch={true} onClick={() => setOpen(false)}>
                         {localizedName(root, locale)}
                       </Link>
                       <ChevronDown className="h-4 w-4 shrink-0 text-navy-400 transition group-open:rotate-180" aria-hidden />
@@ -84,6 +85,7 @@ export default function MobileCategoriesMenu({
                         <Link
                           key={kid.id}
                           href={`/browse?category=${kid.id}`}
+                          prefetch={true}
                           onClick={() => setOpen(false)}
                           className="block rounded-lg px-3 py-2 text-sm text-navy-600 hover:bg-navy-900/5"
                         >

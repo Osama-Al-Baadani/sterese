@@ -42,6 +42,7 @@ export default function MobileBottomNav() {
             <Link
               key={href}
               href={href}
+              prefetch={true}
               className={`relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition ${
                 active ? "text-brand-700" : "text-brand-600"
               }`}

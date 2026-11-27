@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useLocale } from "next-intl";
 import { Bot, ExternalLink, Loader2, PackageX, Send, Sparkles, X } from "lucide-react";
-import { Link } from "@/i18n/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
+import { useCart } from "@/lib/cart-context";
 import SarPrice from "./SarPrice";
 
 interface ChatProduct {
@@ -26,6 +27,8 @@ interface Message {
 
 export default function AiAdvisorChat() {
   const locale = useLocale();
+  const pathname = usePathname();
+  const { drawerOpen } = useCart();
   const isAr = locale === "ar";
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -90,13 +93,26 @@ export default function AiAdvisorChat() {
     }
   };
 
+  // Hide completely on checkout or while the cart drawer is open so it never
+  // overlaps payment controls or slide-over drawers.
+  if (drawerOpen || pathname.startsWith("/checkout")) {
+    return null;
+  }
+
+  const hasStickyProductBar = pathname.startsWith("/product/");
+  const mobileBottomClass = hasStickyProductBar
+    ? "bottom-[calc(134px+env(safe-area-inset-bottom,0px))]"
+    : "bottom-[calc(76px+env(safe-area-inset-bottom,0px))]";
+
   return (
     <div
-      className="fixed bottom-[calc(76px+env(safe-area-inset-bottom,0px))] start-3.5 z-50 md:bottom-6 md:start-6"
+      className={`fixed ${mobileBottomClass} end-3.5 flex flex-col items-end md:bottom-6 md:end-6 ${
+        isOpen ? "z-50" : "z-30"
+      }`}
       dir={isAr ? "rtl" : "ltr"}
     >
       {isOpen && (
-        <div className="mb-3 flex h-[470px] max-h-[calc(100dvh-160px)] w-[calc(100vw-1.75rem)] max-w-[380px] flex-col overflow-hidden rounded-3xl border border-navy-900/10 bg-white shadow-2xl shadow-navy-900/20">
+        <div className="mb-3 flex h-[470px] max-h-[calc(100dvh-210px)] w-[calc(100vw-1.75rem)] max-w-[380px] flex-col overflow-hidden rounded-3xl border border-navy-900/10 bg-white shadow-2xl shadow-navy-900/20 md:max-h-[calc(100dvh-120px)]">
           {/* Header */}
           <div className="flex items-center justify-between bg-gradient-to-l from-navy-900 to-navy-700 px-4 py-3.5 text-white">
             <div className="flex items-center gap-2.5">
@@ -227,11 +243,12 @@ export default function AiAdvisorChat() {
         </div>
       )}
 
-      {/* Clean Floating Toggle Pill Button */}
+      {/* Compact Floating Button — circular icon by default, expands label only on desktop hover */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex items-center gap-2 rounded-full bg-gradient-to-l from-navy-900 to-navy-700 py-1.5 ps-1.5 pe-3 text-white shadow-xl shadow-navy-900/30 ring-2 ring-brand-500/80 transition-all duration-200 hover:scale-[1.03] hover:ring-brand-500 md:gap-2.5 md:py-2 md:ps-2.5 md:pe-4"
+        title={isAr ? "المستشار الذكي — اسألني عن أي منتج أو سعر" : "Smart Advisor — Ask about products & prices"}
+        className="group flex items-center rounded-full bg-gradient-to-l from-navy-900 to-navy-700 p-1.5 text-white shadow-lg shadow-navy-900/25 ring-2 ring-brand-500/80 transition-all duration-200 hover:scale-105 hover:ring-brand-500"
         aria-label={isAr ? "فتح المستشار الذكي" : "Open Smart Advisor"}
       >
         <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-navy-900 shadow-xs md:h-10 md:w-10">
@@ -249,13 +266,10 @@ export default function AiAdvisorChat() {
         </span>
 
         {!isOpen && (
-          <span className="flex flex-col items-start text-start leading-tight">
-            <span className="flex items-center gap-1 text-xs font-extrabold text-white md:text-[13px]">
+          <span className="hidden max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 md:block md:group-hover:max-w-44 md:group-hover:ps-2 md:group-hover:pe-2.5 md:group-hover:opacity-100">
+            <span className="flex items-center gap-1 text-xs font-extrabold text-white">
               {isAr ? "المستشار الذكي" : "Smart Advisor"}
-              <Sparkles className="h-3 w-3 text-brand-500" aria-hidden />
-            </span>
-            <span className="hidden text-[10px] font-medium text-white/80 sm:block">
-              {isAr ? "اسألني عن أي منتج أو سعر" : "Ask about products & prices"}
+              <Sparkles className="h-3 w-3 shrink-0 text-brand-500" aria-hidden />
             </span>
           </span>
         )}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getAppConfig, getCategories, getHomeDepartments, getHomeSectionProducts, getHomeSections } from "@/lib/api";
 import { hasProducts } from "@/lib/category-tree";
 import { localizedAlternates, localizedName } from "@/lib/i18n-helpers";
@@ -15,6 +15,8 @@ import PromoBanner from "@/components/PromoBanner";
 import PromoCards from "@/components/PromoCards";
 import RecentlyViewedSection from "@/components/RecentlyViewedSection";
 
+export const revalidate = 120;
+
 export async function generateMetadata({
   params,
 }: {
@@ -27,14 +29,20 @@ export async function generateMetadata({
   };
 }
 
-export default async function Home() {
-  const [config, categories, departments, homeSections, locale, tHome] = await Promise.all([
+export default async function Home({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
+  const [config, categories, departments, homeSections, tHome] = await Promise.all([
     getAppConfig(),
     getCategories(),
     getHomeDepartments(),
     getHomeSections(),
-    getLocale(),
-    getTranslations("home"),
+    getTranslations({ locale, namespace: "home" }),
   ]);
   const { webCarouselBanners, gridTileBanners, gridStackBanners, promoCards, promoBottomCards, storeSettings } = config;
 

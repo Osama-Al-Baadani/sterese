@@ -1,6 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { getProducts } from "@/lib/api";
+import { getCategorySections, getProducts } from "@/lib/api";
 import { descendantIds } from "@/lib/category-tree";
 import { localizedName } from "@/lib/i18n-helpers";
 import type { Category } from "@/lib/types";
@@ -14,23 +14,31 @@ const PREVIEW_COUNT = 8;
 // tab groups a parent category's children, rather than dumping everything
 // mixed in one undifferentiated list.
 export default async function CategorySections({
+  parentId,
   subcategories,
   categories,
 }: {
+  parentId?: number | null;
   subcategories: Category[];
   categories: Category[];
 }) {
-  const sections = await Promise.all(
-    subcategories.map(async (c) => ({
-      category: c,
-      products: await getProducts({
-        category: descendantIds(categories, c.id).join(","),
-        orderby: "popularity",
-        order: "desc",
-        perPage: PREVIEW_COUNT,
-      }),
-    })),
-  );
+  // Prefer the single batched backend endpoint (/v2/category-sections) to
+  // avoid firing N separate HTTP requests (one per subcategory).
+  let sections = parentId ? await getCategorySections(parentId, PREVIEW_COUNT) : [];
+
+  if (sections.length === 0 && subcategories.length > 0) {
+    sections = await Promise.all(
+      subcategories.map(async (c) => ({
+        category: c,
+        products: await getProducts({
+          category: descendantIds(categories, c.id).join(","),
+          orderby: "popularity",
+          order: "desc",
+          perPage: PREVIEW_COUNT,
+        }),
+      })),
+    );
+  }
 
   const visible = sections.filter((s) => s.products.length > 0);
   if (visible.length === 0) return null;

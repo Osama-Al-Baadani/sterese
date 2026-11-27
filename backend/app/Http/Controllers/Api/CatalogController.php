@@ -9,6 +9,7 @@ use App\Models\Coupon;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CatalogController extends Controller
 {
@@ -158,17 +159,19 @@ class CatalogController extends Controller
      */
     public function categories(): JsonResponse
     {
-        $categories = Category::query()
-            ->where('is_active', true)
-            ->withCount([
-                'products' => fn ($q) => $q->where('status', 'publish'),
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Category $c) => $c->toApiArray((int) $c->products_count))
-            ->values()
-            ->all();
+        $categories = Cache::remember('api_v2_categories', 180, function () {
+            return Category::query()
+                ->where('is_active', true)
+                ->withCount([
+                    'products' => fn ($q) => $q->where('status', 'publish'),
+                ])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (Category $c) => $c->toApiArray((int) $c->products_count))
+                ->values()
+                ->all();
+        });
 
         return response()->json($categories);
     }
@@ -186,69 +189,73 @@ class CatalogController extends Controller
             return response()->json([]);
         }
 
-        $children = Category::query()
-            ->where('is_active', true)
-            ->where('parent_id', $parentId)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+        $sections = Cache::remember("api_v2_category_sections:{$parentId}:{$limit}", 120, function () use ($parentId, $limit) {
+            $children = Category::query()
+                ->where('is_active', true)
+                ->where('parent_id', $parentId)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get();
 
-        if ($children->isEmpty()) {
-            return response()->json([]);
-        }
-
-        // Map each direct child -> all descendant category IDs (including itself)
-        $childDescendantMap = [];
-        $allCatIds = [];
-        foreach ($children as $child) {
-            $desc = $this->expandDescendantCategoryIds([(int) $child->id]);
-            $childDescendantMap[$child->id] = array_fill_keys($desc, true);
-            foreach ($desc as $dId) {
-                $allCatIds[$dId] = true;
+            if ($children->isEmpty()) {
+                return [];
             }
-        }
 
-        // Fetch all matching published products across the entire parent tree in ONE query
-        $products = Product::query()
-            ->with(['categories', 'tags', 'brand'])
-            ->where('status', 'publish')
-            ->whereHas('categories', fn ($q) => $q->whereIn('categories.id', array_keys($allCatIds)))
-            ->orderByRaw("CASE WHEN stock_status = 'instock' THEN 0 ELSE 1 END ASC")
-            ->orderBy('total_sales', 'desc')
-            ->orderBy('sort_order', 'desc')
-            ->orderBy('id', 'desc')
-            ->limit(max(count($children) * $limit * 2, 120))
-            ->get();
+            // Map each direct child -> all descendant category IDs (including itself)
+            $childDescendantMap = [];
+            $allCatIds = [];
+            foreach ($children as $child) {
+                $desc = $this->expandDescendantCategoryIds([(int) $child->id]);
+                $childDescendantMap[$child->id] = array_fill_keys($desc, true);
+                foreach ($desc as $dId) {
+                    $allCatIds[$dId] = true;
+                }
+            }
 
-        // Pre-serialize each product once so products shared across two subcategories aren't serialized twice
-        $serializedById = [];
-        foreach ($products as $p) {
-            $serializedById[$p->id] = $p->toApiArray(false);
-        }
+            // Fetch all matching published products across the entire parent tree in ONE query
+            $products = Product::query()
+                ->with(['categories', 'tags', 'brand'])
+                ->where('status', 'publish')
+                ->whereHas('categories', fn ($q) => $q->whereIn('categories.id', array_keys($allCatIds)))
+                ->orderByRaw("CASE WHEN stock_status = 'instock' THEN 0 ELSE 1 END ASC")
+                ->orderBy('total_sales', 'desc')
+                ->orderBy('sort_order', 'desc')
+                ->orderBy('id', 'desc')
+                ->limit(max(count($children) * $limit * 2, 120))
+                ->get();
 
-        $sections = [];
-        foreach ($children as $child) {
-            $allowedCatIds = $childDescendantMap[$child->id];
-            $bucket = [];
+            // Pre-serialize each product once so products shared across two subcategories aren't serialized twice
+            $serializedById = [];
             foreach ($products as $p) {
-                foreach ($p->categories as $pCat) {
-                    if (isset($allowedCatIds[$pCat->id])) {
-                        $bucket[] = $serializedById[$p->id];
+                $serializedById[$p->id] = $p->toApiArray(false);
+            }
+
+            $result = [];
+            foreach ($children as $child) {
+                $allowedCatIds = $childDescendantMap[$child->id];
+                $bucket = [];
+                foreach ($products as $p) {
+                    foreach ($p->categories as $pCat) {
+                        if (isset($allowedCatIds[$pCat->id])) {
+                            $bucket[] = $serializedById[$p->id];
+                            break;
+                        }
+                    }
+                    if (count($bucket) >= $limit) {
                         break;
                     }
                 }
-                if (count($bucket) >= $limit) {
-                    break;
+
+                if (!empty($bucket)) {
+                    $result[] = [
+                        'category' => $child->toApiArray(count($bucket)),
+                        'products' => $bucket,
+                    ];
                 }
             }
 
-            if (!empty($bucket)) {
-                $sections[] = [
-                    'category' => $child->toApiArray(count($bucket)),
-                    'products' => $bucket,
-                ];
-            }
-        }
+            return $result;
+        });
 
         return response()->json($sections);
     }
@@ -258,21 +265,23 @@ class CatalogController extends Controller
      */
     public function brands(): JsonResponse
     {
-        $brands = BrandSetting::query()
-            ->where('is_active', true)
-            ->withCount([
-                'products' => fn ($q) => $q->where('status', 'publish'),
-            ])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->map(function (BrandSetting $b) {
-                $count = max((int) $b->products_count, (int) $b->product_count);
-                return $b->toApiArray($count);
-            })
-            ->filter(fn (array $b) => $b['count'] > 0)
-            ->values()
-            ->all();
+        $brands = Cache::remember('api_v2_brands', 180, function () {
+            return BrandSetting::query()
+                ->where('is_active', true)
+                ->withCount([
+                    'products' => fn ($q) => $q->where('status', 'publish'),
+                ])
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(function (BrandSetting $b) {
+                    $count = max((int) $b->products_count, (int) $b->product_count);
+                    return $b->toApiArray($count);
+                })
+                ->filter(fn (array $b) => $b['count'] > 0)
+                ->values()
+                ->all();
+        });
 
         return response()->json($brands);
     }

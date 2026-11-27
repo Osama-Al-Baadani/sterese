@@ -183,7 +183,7 @@ export default async function BrowsePage({
                 selectedId={selectedId}
                 base={{ brand, sort, in_stock: inStock ? "1" : undefined }}
               />
-              <CategorySections subcategories={directChildren} categories={categories} />
+              <CategorySections parentId={selectedId} subcategories={directChildren} categories={categories} />
             </>
           ) : (
             <BrowseInteractive

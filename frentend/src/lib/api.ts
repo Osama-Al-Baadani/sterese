@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { backendFetch } from "./backend";
 import { descendantIds } from "./category-tree";
 import type { AppConfig, Brand, Category, HomeDepartment, HomeSection, Product, StoreSettings } from "./types";
@@ -45,9 +46,9 @@ const EMPTY_APP_CONFIG: AppConfig = {
  * unreachable (e.g. a deploy in progress) — every read here fails soft
  * into an empty/default shape instead of crashing the page.
  */
-export async function getAppConfig(): Promise<AppConfig> {
+export const getAppConfig = cache(async (): Promise<AppConfig> => {
   try {
-    const data = await backendFetch<Record<string, unknown>>("app-config");
+    const data = await backendFetch<Record<string, unknown>>("app-config", { revalidate: 120 });
     return {
       webCarouselBanners: (data.webCarouselBanners as AppConfig["webCarouselBanners"]) ?? [],
       gridTileBanners: (data.gridTileBanners as AppConfig["gridTileBanners"]) ?? [],
@@ -63,49 +64,64 @@ export async function getAppConfig(): Promise<AppConfig> {
   } catch {
     return EMPTY_APP_CONFIG;
   }
-}
+});
 
-export async function getCategories(): Promise<Category[]> {
+export const getCategories = cache(async (): Promise<Category[]> => {
   try {
-    const data = await backendFetch<Category[]>("v2/categories", { v2Auth: true });
+    const data = await backendFetch<Category[]>("v2/categories", { v2Auth: true, revalidate: 300 });
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
-}
+});
 
-export async function getBrands(): Promise<Brand[]> {
+export const getBrands = cache(async (): Promise<Brand[]> => {
   try {
-    const data = await backendFetch<Brand[]>("v2/brands", { v2Auth: true });
+    const data = await backendFetch<Brand[]>("v2/brands", { v2Auth: true, revalidate: 300 });
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
-}
+});
 
 // Empty result means no admin curation yet — the homepage department grid
 // falls back to root categories only.
-export async function getHomeDepartments(): Promise<HomeDepartment[]> {
+export const getHomeDepartments = cache(async (): Promise<HomeDepartment[]> => {
   try {
-    const data = await backendFetch<{ departments: HomeDepartment[] }>("home-departments");
+    const data = await backendFetch<{ departments: HomeDepartment[] }>("home-departments", { revalidate: 120 });
     const list = data.departments ?? [];
     return list.filter((d) => d.id > 0);
   } catch {
     return [];
   }
-}
+});
 
 // Same admin-curated homepage blocks already live in the app — a product
 // carousel per section (category/tag/bestsellers/featured), each with its
 // own optional banner.
-export async function getHomeSections(): Promise<HomeSection[]> {
+export const getHomeSections = cache(async (): Promise<HomeSection[]> => {
   try {
-    const data = await backendFetch<{ sections: HomeSection[] }>("home-sections");
+    const data = await backendFetch<{ sections: HomeSection[] }>("home-sections", { revalidate: 120 });
     return data.sections ?? [];
   } catch {
     return [];
   }
-}
+});
+
+export const getCategorySections = cache(
+  async (parentId: number, perPage = 8): Promise<{ category: Category; products: Product[] }[]> => {
+    try {
+      const data = await backendFetch<{ category: Category; products: Product[] }[]>("v2/category-sections", {
+        v2Auth: true,
+        query: { parent_id: parentId, per_page: perPage },
+        revalidate: 120,
+      });
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+);
 
 /** Resolves a home section's actual product list — a manual product_ids
  * pick always wins (matches the admin form: it's only offered as an
@@ -189,7 +205,7 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
         per_page: filters.perPage ?? 24,
       },
       // Search results change often and are cheap to refetch — skip ISR caching for them.
-      revalidate: filters.search || filters.fresh ? false : 300,
+      revalidate: filters.search || filters.fresh ? false : 120,
     });
     return Array.isArray(data) ? data : [];
   } catch {
@@ -197,11 +213,11 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
   }
 }
 
-export async function getProduct(id: number): Promise<Product | null> {
+export const getProduct = cache(async (id: number): Promise<Product | null> => {
   try {
-    return await backendFetch<Product>(`v2/products/${id}`, { v2Auth: true });
+    return await backendFetch<Product>(`v2/products/${id}`, { v2Auth: true, revalidate: 120 });
   } catch {
     const fallback = await getProducts({ include: String(id), perPage: 1 });
     return fallback.find((p) => p.id === id) ?? null;
   }
-}
+});

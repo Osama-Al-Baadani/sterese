@@ -59,16 +59,27 @@ function buildUrl(path: string, query?: FetchOpts["query"]) {
 /** Thin JSON fetch wrapper — throws BackendError on non-2xx so callers can
  * catch a single error type instead of re-checking res.ok everywhere. */
 export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
+  const method = (opts.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = { Accept: "application/json" };
   if (opts.v2Auth && v2AuthHeader) headers.Authorization = v2AuthHeader;
   if (opts.bearerToken) headers.Authorization = `Bearer ${opts.bearerToken}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
 
+  // Cache only public GET reads that explicitly opt into a revalidate TTL;
+  // mutations, bearer-authenticated customer reads, and fresh/search calls
+  // stay strictly uncached.
+  const canCache =
+    method === "GET" &&
+    !opts.bearerToken &&
+    typeof opts.revalidate === "number" &&
+    opts.revalidate > 0;
+
   const res = await fetch(buildUrl(path, opts.query), {
-    method: opts.method ?? "GET",
+    method,
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    cache: "no-store",
+    ...(canCache ? { next: { revalidate: opts.revalidate as number } } : { cache: "no-store" }),
+    signal: AbortSignal.timeout(12000),
   });
 
   const text = await res.text();

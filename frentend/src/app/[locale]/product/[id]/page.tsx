@@ -18,6 +18,8 @@ import { bundleLabel, safeJsonLd, stripHtml } from "@/lib/format";
 import { localizedAlternates, localizedDescription, localizedName } from "@/lib/i18n-helpers";
 import type { Product } from "@/lib/types";
 
+export const revalidate = 120;
+
 type Params = { id: string; locale: string };
 
 export async function generateMetadata({

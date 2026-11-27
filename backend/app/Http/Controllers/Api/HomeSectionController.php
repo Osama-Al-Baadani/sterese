@@ -6,49 +6,54 @@ use App\Http\Controllers\Controller;
 use App\Models\HomeSection;
 use App\Models\HomeSectionBanner;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class HomeSectionController extends Controller
 {
     public function index(): JsonResponse
     {
-        $sections = HomeSection::with('banners')
-            ->where('visible', true)
-            ->orderBy('sort_order')
-            ->get()
-            ->map(function (HomeSection $s) {
-                $appBanners = $s->banners
-                    ->filter(fn (HomeSectionBanner $b) => in_array($b->platform ?? 'both', ['both', 'app'], true))
-                    ->map(fn (HomeSectionBanner $b) => $this->formatBanner($b))
-                    ->values()
-                    ->all();
+        $sections = Cache::remember('api_home_sections', 120, function () {
+            return HomeSection::with('banners')
+                ->where('visible', true)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(function (HomeSection $s) {
+                    $appBanners = $s->banners
+                        ->filter(fn (HomeSectionBanner $b) => in_array($b->platform ?? 'both', ['both', 'app'], true))
+                        ->map(fn (HomeSectionBanner $b) => $this->formatBanner($b))
+                        ->values()
+                        ->all();
 
-                $webBanners = $s->banners
-                    ->filter(fn (HomeSectionBanner $b) => in_array($b->platform ?? 'both', ['both', 'web'], true))
-                    ->map(fn (HomeSectionBanner $b) => $this->formatBanner($b))
-                    ->values()
-                    ->all();
+                    $webBanners = $s->banners
+                        ->filter(fn (HomeSectionBanner $b) => in_array($b->platform ?? 'both', ['both', 'web'], true))
+                        ->map(fn (HomeSectionBanner $b) => $this->formatBanner($b))
+                        ->values()
+                        ->all();
 
-                $sourceIds = $s->source_ids ?? ($s->source_id ? [(int) $s->source_id] : []);
+                    $sourceIds = $s->source_ids ?? ($s->source_id ? [(int) $s->source_id] : []);
 
-                return [
-                    'id'              => $s->id,
-                    'title'           => $s->title,
-                    'icon'            => $s->icon,
-                    'source_type'     => $s->source_type,
-                    'source_id'       => $s->source_id,
-                    'source_ids'      => array_map('intval', $sourceIds),
-                    'source_slugs'    => $s->source_slugs ?? [],
-                    'product_ids'     => array_map('intval', $s->product_ids ?? []),
-                    'products_limit'  => (int) $s->products_limit,
-                    'sort_by'         => $s->sort_by ?? 'default',
-                    'banner_url'      => $appBanners[0]['image_url'] ?? '',
-                    'banner_link'     => $appBanners[0]['link'] ?? '',
-                    'banner_url_web'  => $webBanners[0]['image_url'] ?? '',
-                    'banner_link_web' => $webBanners[0]['link'] ?? '',
-                    'banners'         => $appBanners,
-                    'banners_web'     => $webBanners,
-                ];
-            });
+                    return [
+                        'id'              => $s->id,
+                        'title'           => $s->title,
+                        'icon'            => $s->icon,
+                        'source_type'     => $s->source_type,
+                        'source_id'       => $s->source_id,
+                        'source_ids'      => array_map('intval', $sourceIds),
+                        'source_slugs'    => $s->source_slugs ?? [],
+                        'product_ids'     => array_map('intval', $s->product_ids ?? []),
+                        'products_limit'  => (int) $s->products_limit,
+                        'sort_by'         => $s->sort_by ?? 'default',
+                        'banner_url'      => $appBanners[0]['image_url'] ?? '',
+                        'banner_link'     => $appBanners[0]['link'] ?? '',
+                        'banner_url_web'  => $webBanners[0]['image_url'] ?? '',
+                        'banner_link_web' => $webBanners[0]['link'] ?? '',
+                        'banners'         => $appBanners,
+                        'banners_web'     => $webBanners,
+                    ];
+                })
+                ->values()
+                ->all();
+        });
 
         return response()->json(['sections' => $sections]);
     }

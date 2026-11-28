@@ -66,6 +66,8 @@ export interface StorefrontInitPayload {
   sectionsWithProducts: { section: HomeSection; products: Product[] }[];
 }
 
+let lastGoodStorefrontInit: StorefrontInitPayload | null = null;
+
 /**
  * Single unified bootstrap fetch — grabs appConfig, categories, brands,
  * departments, and resolved homepage product sections in ONE request instead
@@ -85,7 +87,7 @@ export const getStorefrontInit = cache(async (): Promise<StorefrontInitPayload |
     const version = typeof raw.version === "string" ? raw.version : undefined;
     rememberVersion(version);
 
-    return {
+    const payload: StorefrontInitPayload = {
       version,
       appConfig: normalizeAppConfig(raw.appConfig),
       categories: Array.isArray(raw.categories) ? raw.categories : [],
@@ -93,8 +95,10 @@ export const getStorefrontInit = cache(async (): Promise<StorefrontInitPayload |
       departments: Array.isArray(raw.departments) ? raw.departments.filter((d) => d.id > 0) : [],
       sectionsWithProducts: Array.isArray(raw.sectionsWithProducts) ? raw.sectionsWithProducts : [],
     };
+    lastGoodStorefrontInit = payload;
+    return payload;
   } catch {
-    return null;
+    return lastGoodStorefrontInit;
   }
 });
 

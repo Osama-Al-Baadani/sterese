@@ -92,7 +92,7 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
             type="button"
             onClick={() => scrollStep("prev")}
             aria-label="عرض السابق"
-            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white text-navy-700 shadow-md shadow-navy-900/5 transition-all duration-300 hover:scale-105 hover:border-brand-500 hover:bg-brand-600 hover:text-navy-900 sm:flex"
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/95 bg-white/75 text-navy-700 ring-1 ring-navy-900/[0.08] shadow-[0_8px_20px_-6px_rgba(26,39,66,0.14),inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-lg transition-all duration-300 hover:scale-105 hover:bg-brand-700 hover:text-white hover:ring-brand-700 sm:flex"
           >
             <ChevronRight className="h-5 w-5 ltr:rotate-180" aria-hidden />
           </button>
@@ -105,7 +105,7 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUpOrLeave}
           onMouseLeave={onMouseUpOrLeave}
-          className={`-mx-4 flex min-w-0 flex-1 flex-nowrap items-stretch gap-2.5 overflow-x-auto scroll-smooth px-4 pt-1 pb-2 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:gap-5 sm:px-1 sm:pt-2 sm:pb-3 ${
+          className={`-mx-4 flex min-w-0 flex-1 flex-nowrap items-stretch gap-2.5 overflow-x-auto scroll-smooth px-4 pt-1.5 pb-3 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:gap-4 sm:px-1.5 sm:pt-2.5 sm:pb-4 ${
             !hasOverflow ? "sm:justify-center" : "cursor-grab active:cursor-grabbing"
           }`}
         >
@@ -123,10 +123,22 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
                     dragState.current.moved = false;
                   }
                 }}
-                className="group flex w-[96px] shrink-0 flex-col rounded-t-[999px] rounded-b-[18px] border border-navy-900/[0.09] bg-white p-1.5 shadow-[0_4px_14px_-6px_rgba(26,39,66,0.12)] transition-all duration-300 ease-out active:scale-95 sm:w-[158px] sm:rounded-b-[30px] sm:p-2.5 sm:shadow-[0_6px_22px_-10px_rgba(26,39,66,0.13)] sm:hover:-translate-y-2 hover:border-brand-500/60 sm:hover:shadow-[0_14px_30px_-10px_rgba(26,39,66,0.16)] lg:w-[170px]"
+                className="group relative isolate flex w-[98px] shrink-0 flex-col overflow-hidden rounded-[22px] border border-white/95 bg-gradient-to-b from-white/80 via-white/60 to-white/80 p-1.5 ring-1 ring-navy-900/[0.07] backdrop-blur-xl shadow-[0_8px_24px_-10px_rgba(26,39,66,0.13),inset_0_1.5px_0_0_rgba(255,255,255,1)] transition-all duration-300 ease-out active:scale-95 hover:ring-brand-500/55 sm:w-[162px] sm:rounded-[30px] sm:p-2.5 sm:shadow-[0_12px_28px_-12px_rgba(26,39,66,0.14),inset_0_1.5px_0_0_rgba(255,255,255,1)] sm:hover:-translate-y-2 sm:hover:shadow-[0_20px_38px_-12px_rgba(27,117,187,0.18),inset_0_1.5px_0_0_rgba(255,255,255,1)] lg:w-[172px]"
               >
-                {/* Pure White Sculpted Arch Window */}
-                <span className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-t-[999px] rounded-b-[13px] border border-navy-900/[0.07] bg-white p-2.5 transition-colors duration-300 group-hover:border-brand-500/35 sm:rounded-b-[22px] sm:p-5">
+                {/* Animated diagonal crystal sheen sweep on hover */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -inset-y-6 -left-full z-30 w-2/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/75 to-transparent opacity-0 transition-all duration-700 ease-out group-hover:left-[135%] group-hover:opacity-100"
+                />
+
+                {/* Crystal Inner Product Showcase (pure white core so white product photos blend seamlessly) */}
+                <span className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[16px] border border-navy-900/[0.06] bg-white p-2.5 shadow-[0_3px_12px_-4px_rgba(26,39,66,0.07),inset_0_1px_0_rgba(255,255,255,1)] transition-all duration-300 group-hover:border-brand-500/30 sm:rounded-[22px] sm:p-4">
+                  {/* Subtle top glass reflection arc */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 top-0 z-20 h-1/3 bg-gradient-to-b from-slate-50/40 to-transparent"
+                  />
+
                   {item.imageUrl ? (
                     <Image
                       src={item.imageUrl}
@@ -148,17 +160,23 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
                   )}
                 </span>
 
-                {/* Pure white icon badge on the arch seam */}
+                {/* Frosted Glass Floating Icon Jewel */}
                 <span
                   aria-hidden
-                  className="relative z-20 mx-auto -mt-2.5 flex h-5 w-5 items-center justify-center rounded-full border border-navy-900/10 bg-white text-navy-600 shadow-2xs transition-all duration-300 group-hover:scale-110 group-hover:border-brand-700 group-hover:bg-brand-700 group-hover:text-white sm:-mt-3.5 sm:h-7 sm:w-7"
+                  className="relative z-20 mx-auto -mt-2.5 flex h-5.5 w-5.5 items-center justify-center rounded-full border border-white bg-white/85 text-navy-700 ring-1 ring-navy-900/[0.09] backdrop-blur-md shadow-[0_4px_10px_rgba(26,39,66,0.10)] transition-all duration-300 group-hover:scale-110 group-hover:border-brand-700 group-hover:bg-brand-700 group-hover:text-white group-hover:ring-brand-700 sm:-mt-3.5 sm:h-7.5 sm:w-7.5"
                 >
                   <Icon className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
                 </span>
 
-                {/* Pedestal Label */}
-                <span className="mt-1 flex min-h-[1.9rem] items-center justify-center px-0.5 pb-0.5 text-center text-[11px] font-extrabold leading-[1.28] text-navy-900 transition-colors duration-300 group-hover:text-brand-700 sm:mt-2 sm:min-h-[2.4rem] sm:px-1.5 sm:pb-1 sm:text-[13.5px] sm:leading-snug">
-                  <span className="line-clamp-2">{item.label}</span>
+                {/* Pedestal Label + Glass Indicator Accent */}
+                <span className="mt-1 flex flex-1 flex-col items-center justify-between px-0.5 pb-0.5 text-center sm:mt-2 sm:px-1.5 sm:pb-1">
+                  <span className="flex min-h-[1.9rem] items-center justify-center text-[11px] font-extrabold leading-[1.28] text-navy-900 transition-colors duration-300 group-hover:text-brand-700 sm:min-h-[2.4rem] sm:text-[13.5px] sm:leading-snug">
+                    <span className="line-clamp-2">{item.label}</span>
+                  </span>
+                  <span
+                    aria-hidden
+                    className="mt-1 h-[2.5px] w-4 rounded-full bg-navy-900/[0.08] transition-all duration-300 group-hover:w-9 group-hover:bg-gradient-to-r group-hover:from-brand-500 group-hover:to-brand-700 sm:mt-1.5 sm:h-[3px] sm:w-5 sm:group-hover:w-11"
+                  />
                 </span>
               </Link>
             );
@@ -170,7 +188,7 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
             type="button"
             onClick={() => scrollStep("next")}
             aria-label="عرض المزيد"
-            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white text-navy-700 shadow-md shadow-navy-900/5 transition-all duration-300 hover:scale-105 hover:border-brand-500 hover:bg-brand-600 hover:text-navy-900 sm:flex"
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/95 bg-white/75 text-navy-700 ring-1 ring-navy-900/[0.08] shadow-[0_8px_20px_-6px_rgba(26,39,66,0.14),inset_0_1px_0_rgba(255,255,255,1)] backdrop-blur-lg transition-all duration-300 hover:scale-105 hover:bg-brand-700 hover:text-white hover:ring-brand-700 sm:flex"
           >
             <ChevronLeft className="h-5 w-5 ltr:rotate-180" aria-hidden />
           </button>
@@ -178,20 +196,22 @@ export default function CategoryGridRow({ items }: { items: DeptItem[] }) {
       </div>
 
       {hasOverflow && pageCount > 1 && (
-        <div className="mt-2.5 flex items-center justify-center gap-1.5 sm:mt-4 sm:gap-2">
-          {Array.from({ length: pageCount }).map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => scrollToPage(i)}
-              aria-label={`صفحة ${i + 1}`}
-              className={`h-1.5 rounded-full transition-all duration-300 sm:h-2 ${
-                i === activePage
-                  ? "w-5 bg-brand-600 shadow-2xs sm:w-7"
-                  : "w-1.5 bg-navy-900/15 hover:bg-navy-900/30 sm:w-2"
-              }`}
-            />
-          ))}
+        <div className="mt-2.5 flex justify-center sm:mt-4">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/95 bg-white/75 px-3 py-1.5 ring-1 ring-navy-900/[0.06] backdrop-blur-md shadow-2xs sm:gap-2 sm:px-3.5">
+            {Array.from({ length: pageCount }).map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => scrollToPage(i)}
+                aria-label={`صفحة ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all duration-300 sm:h-2 ${
+                  i === activePage
+                    ? "w-5 bg-gradient-to-r from-brand-500 to-brand-700 shadow-2xs sm:w-7"
+                    : "w-1.5 bg-navy-900/18 hover:bg-navy-900/35 sm:w-2"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

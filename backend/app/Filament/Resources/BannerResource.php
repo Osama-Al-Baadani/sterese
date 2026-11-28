@@ -58,8 +58,7 @@ class BannerResource extends Resource
                     ->image()
                     ->disk('public')
                     ->directory('banners')
-                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                    ->maxSize(3072)
+                    ->maxSize(10240)
                     ->columnSpanFull(),
 
                 TextInput::make('external_url')

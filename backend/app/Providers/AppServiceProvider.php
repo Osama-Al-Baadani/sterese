@@ -48,6 +48,22 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
+        // Ensure Storage::disk('public')->url(...) matches the active request host/port (e.g. :8000 vs :8001)
+        if (!$this->app->runningInConsole() && request()->getHost()) {
+            config([
+                'filesystems.disks.public.url' => rtrim(request()->getSchemeAndHttpHost(), '/') . '/storage',
+            ]);
+        }
+
+        // Allow Livewire temporary upload previews for modern image extensions (.avif, .jfif, .heic, etc.)
+        $previewMimes = config('livewire.temporary_file_upload.preview_mimes', []);
+        config([
+            'livewire.temporary_file_upload.preview_mimes' => array_values(array_unique(array_merge(
+                is_array($previewMimes) ? $previewMimes : [],
+                ['avif', 'jfif', 'webp', 'svg', 'heic', 'heif'],
+            ))),
+        ]);
+
         // Automatically bump storefront cache version & notify Next.js whenever
         // any catalog, banner, section, or store configuration model changes.
         $storefrontModels = [

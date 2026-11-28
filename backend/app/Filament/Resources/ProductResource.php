@@ -175,9 +175,8 @@ class ProductResource extends Resource
                                         ->downloadable()
                                         ->disk('public')
                                         ->directory('products')
-                                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                                         ->maxFiles(20)
-                                        ->maxSize(4096)
+                                        ->maxSize(10240)
                                         ->panelLayout('grid')
                                         ->helperText('اسحب الصور لترتيبها · اضغط أيقونة القلم لقص وتعديل الصورة مباشرة'),
 

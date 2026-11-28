@@ -7,13 +7,12 @@
 import { STOREFRONT_CACHE_TAG } from "./storefront-cache";
 
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:8001").trim().replace(/\/+$/, "");
-const V2_API_KEY = (process.env.V2_API_KEY ?? "").trim();
-const V2_API_SECRET = (process.env.V2_API_SECRET ?? "").trim();
 
-const v2AuthHeader =
-  V2_API_KEY && V2_API_SECRET
-    ? "Basic " + Buffer.from(`${V2_API_KEY}:${V2_API_SECRET}`).toString("base64")
-    : undefined;
+function getV2AuthHeader(): string | undefined {
+  const key = (process.env.V2_API_KEY ?? "").trim();
+  const secret = (process.env.V2_API_SECRET ?? "").trim();
+  return key && secret ? "Basic " + Buffer.from(`${key}:${secret}`).toString("base64") : undefined;
+}
 
 /** Pulls the customer bearer token out of an incoming request's own
  * Authorization header, to forward on to backendFetch. */
@@ -63,7 +62,8 @@ function buildUrl(path: string, query?: FetchOpts["query"]) {
 export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   const method = (opts.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (opts.v2Auth && v2AuthHeader) headers.Authorization = v2AuthHeader;
+  const v2AuthHeader = opts.v2Auth ? getV2AuthHeader() : undefined;
+  if (v2AuthHeader) headers.Authorization = v2AuthHeader;
   if (opts.bearerToken) headers.Authorization = `Bearer ${opts.bearerToken}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
 

@@ -161,7 +161,7 @@ class HomeSectionResource extends Resource
                                     ->image()
                                     ->disk('public')
                                     ->directory('home-section-banners')
-                                    ->maxSize(2048),
+                                    ->maxSize(10240),
 
                                 TextInput::make('external_url')
                                     ->label('أو رابط صورة خارجي')

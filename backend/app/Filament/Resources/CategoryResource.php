@@ -89,9 +89,8 @@ class CategoryResource extends Resource
                         ->image()
                         ->disk('public')
                         ->directory('categories')
-                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->maxSize(2048)
-                        ->helperText('مربع مفضّل (600×600) — بحد أقصى 2MB'),
+                        ->maxSize(10240)
+                        ->helperText('مربع مفضّل (600×600) — يدعم جميع صيغ الصور (JPG, PNG, WebP, AVIF, JFIF, SVG)'),
 
                     TextInput::make('external_image_url')
                         ->label('أو رابط صورة خارجي (اختياري)')

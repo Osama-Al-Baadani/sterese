@@ -81,7 +81,7 @@ class CatalogController extends Controller
     {
         $ver = $this->cacheVersion();
 
-        $payload = Cache::remember("api_v2_storefront_init:{$ver}", 180, function () {
+        $payload = Cache::remember("api_v2_storefront_init:{$ver}", 180, function () use ($ver) {
             $appConfig = app(AppConfigController::class)->index()->getData(true);
             $categories = $this->computeCategories();
             $brands = $this->computeBrands();
@@ -191,6 +191,22 @@ class CatalogController extends Controller
 
                 case 'featured':
                     $query->where('products.featured', true);
+                    break;
+
+                case 'on_sale':
+                    $query->where('products.on_sale', true);
+                    break;
+
+                case 'brand':
+                    $slugs = array_values(array_filter(array_map('strval', $section['source_slugs'] ?? [])));
+                    if (empty($slugs)) {
+                        return [];
+                    }
+                    $brandIds = BrandSetting::query()->whereIn('slug', $slugs)->pluck('id')->all();
+                    if (empty($brandIds)) {
+                        return [];
+                    }
+                    $query->whereIn('products.brand_setting_id', $brandIds);
                     break;
 
                 default:

@@ -15,8 +15,18 @@ export default async function CategoryGrid({ items }: { items: DeptItem[] }) {
   const t = await getTranslations("home");
 
   return (
-    <section className="bg-white py-5 sm:py-11">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="relative overflow-hidden border-y border-navy-900/[0.04] bg-gradient-to-b from-slate-100/65 via-slate-50/40 to-white py-5 sm:py-11">
+      {/* Subtle pearlescent light orbs so frosted glass cards refract real depth */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-20 start-1/4 h-56 w-72 rounded-full bg-sky-200/20 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-20 end-1/4 h-56 w-72 rounded-full bg-brand-200/20 blur-3xl"
+      />
+
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-3.5 flex items-center justify-between gap-3 sm:mb-7">
           <h2 className="text-base font-extrabold text-navy-900 sm:text-2xl">
             {t("shopByDepartment")}

@@ -78,7 +78,7 @@ class HomeDepartmentResource extends Resource
                     ->image()
                     ->disk('public')
                     ->directory('home-department-icons')
-                    ->maxSize(1024),
+                    ->maxSize(10240),
 
                 TextInput::make('external_url')
                     ->label('أو رابط صورة خارجي (اختياري)')

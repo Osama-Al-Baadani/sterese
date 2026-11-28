@@ -64,8 +64,7 @@ class BrandSettingResource extends Resource
                         ->image()
                         ->disk('public')
                         ->directory('brands')
-                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->maxSize(2048),
+                        ->maxSize(10240),
 
                     TextInput::make('image_url')
                         ->label('أو رابط شعار خارجي (اختياري)')

@@ -3,7 +3,9 @@ import {
   Apple,
   Baby,
   Bed,
+  Beef,
   ChefHat,
+  Cookie,
   CupSoda,
   Gamepad2,
   Gift,
@@ -17,6 +19,7 @@ import {
   Sparkles,
   SprayCan,
   UtensilsCrossed,
+  Wheat,
 } from "lucide-react";
 
 const PALETTE = [
@@ -36,8 +39,11 @@ const PALETTE = [
 
 const KEYWORD_ICONS: [RegExp, LucideIcon][] = [
   [/مشروبات|عصائر|مياه|قهوة|شاي/i, CupSoda],
+  [/لحوم|لحم|دواجن|دجاج|سمك|أسماك|بحري/i, Beef],
   [/ألبان|اجبان|أجبان|حليب|بيض/i, Milk],
-  [/زيوت|دقيق|طحين|طبخ|بهارات|توابل|أرز|سكر/i, ChefHat],
+  [/أرز|معكرون|مكرون|حبوب|شوفان|مخبوز|خبز/i, Wheat],
+  [/زيوت|دقيق|طحين|طبخ|بهارات|توابل|سكر/i, ChefHat],
+  [/حلويات|شوكولات|بسكويت|سناك|مكسرات|شيبس/i, Cookie],
   [/مقاضي|بقال|سوبر ?ماركت|معلبات/i, ShoppingBasket],
   [/خضار|فواكه|غذائ|طعام|مواد|تمور/i, Apple],
   [/تنظيف|منظف|غسيل|ورقيات|بلاستيك/i, SprayCan],

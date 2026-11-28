@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { LayoutGrid } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import CategoryGridRow from "./CategoryGridRow";
 
@@ -16,23 +15,27 @@ export default async function CategoryGrid({ items }: { items: DeptItem[] }) {
   const t = await getTranslations("home");
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-brand-50/55 via-brand-50/20 to-white py-8 sm:py-12">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8">
-          <div>
-            <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-100/80 px-3 py-1 text-[11px] font-extrabold text-brand-700">
-              <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-              {t("everythingInOnePlace")}
-            </span>
-            <h2 className="text-xl font-black tracking-tight text-navy-900 sm:text-2xl lg:text-3xl">
-              {t("shopByDepartment")}
-            </h2>
-          </div>
+    <section className="relative overflow-hidden bg-gradient-to-b from-brand-50/70 via-amber-50/20 to-white py-8 sm:py-12">
+      {/* Ambient soft background accents */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-24 start-1/4 h-64 w-64 rounded-full bg-brand-200/30 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-20 end-12 h-56 w-56 rounded-full bg-brand-700/[0.05] blur-3xl"
+      />
+
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-5 flex items-center justify-between gap-3 sm:mb-7">
+          <h2 className="text-xl font-extrabold text-navy-900 sm:text-2xl">
+            {t("shopByDepartment")}
+          </h2>
 
           <Link
             href="/browse"
             prefetch={true}
-            className="inline-flex items-center gap-1 rounded-full border border-navy-900/10 bg-white px-4 py-1.5 text-xs font-extrabold text-navy-800 shadow-xs transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 sm:text-sm"
+            className="shrink-0 text-sm font-bold text-brand-700 hover:underline"
           >
             {t("seeAll")}
           </Link>

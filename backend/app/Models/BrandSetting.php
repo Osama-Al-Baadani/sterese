@@ -34,8 +34,8 @@ class BrandSetting extends Model
             $brand->slug = static::uniqueSlug($rawSlug, $brand->exists ? $brand->id : null);
         });
 
-        static::saved(fn () => \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400));
-        static::deleted(fn () => \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400));
+        static::saved(fn () => \App\Support\StorefrontCache::bump());
+        static::deleted(fn () => \App\Support\StorefrontCache::bump());
     }
 
     public static function uniqueSlug(string $raw, ?int $ignoreId = null): string

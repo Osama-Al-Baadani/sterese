@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { backendFetch } from "./backend";
 import { descendantIds } from "./category-tree";
+import { rememberVersion } from "./storefront-cache";
 import type { AppConfig, Brand, Category, HomeDepartment, HomeSection, Product, StoreSettings } from "./types";
 
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
@@ -57,6 +58,7 @@ function normalizeAppConfig(data: Record<string, unknown> | null | undefined): A
 }
 
 export interface StorefrontInitPayload {
+  version?: string;
   appConfig: AppConfig;
   categories: Category[];
   brands: Brand[];
@@ -72,6 +74,7 @@ export interface StorefrontInitPayload {
 export const getStorefrontInit = cache(async (): Promise<StorefrontInitPayload | null> => {
   try {
     const raw = await backendFetch<{
+      version?: string;
       appConfig?: Record<string, unknown>;
       categories?: Category[];
       brands?: Brand[];
@@ -79,7 +82,11 @@ export const getStorefrontInit = cache(async (): Promise<StorefrontInitPayload |
       sectionsWithProducts?: { section: HomeSection; products: Product[] }[];
     }>("v2/storefront-init", { v2Auth: true, revalidate: 180 });
 
+    const version = typeof raw.version === "string" ? raw.version : undefined;
+    rememberVersion(version);
+
     return {
+      version,
       appConfig: normalizeAppConfig(raw.appConfig),
       categories: Array.isArray(raw.categories) ? raw.categories : [],
       brands: Array.isArray(raw.brands) ? raw.brands : [],

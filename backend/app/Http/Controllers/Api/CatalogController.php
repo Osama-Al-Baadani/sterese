@@ -52,7 +52,7 @@ class CatalogController extends Controller
 
     private function cacheVersion(): string
     {
-        return (string) Cache::get('catalog_cache_ver', 'v1');
+        return \App\Support\StorefrontCache::version();
     }
 
     /**
@@ -135,6 +135,7 @@ class CatalogController extends Controller
             }
 
             return [
+                'version'              => $ver,
                 'appConfig'            => $appConfig,
                 'categories'           => $categories,
                 'brands'               => $brands,

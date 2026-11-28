@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       // Laravel backend (ecostore-panel) — banner/category/product images served
       // from its public storage disk.
+      { protocol: "http", hostname: "localhost", port: "8000" },
+      { protocol: "http", hostname: "127.0.0.1", port: "8000" },
       { protocol: "http", hostname: "localhost", port: "8001" },
       { protocol: "http", hostname: "127.0.0.1", port: "8001" },
       // Staging deployment on Alibaba Cloud (storeseco-prod-01).

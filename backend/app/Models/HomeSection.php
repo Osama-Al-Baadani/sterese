@@ -34,13 +34,7 @@ class HomeSection extends Model
 
     protected static function booted(): void
     {
-        static::saved(function () {
-            \Illuminate\Support\Facades\Cache::forget('api_home_sections');
-            \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400);
-        });
-        static::deleted(function () {
-            \Illuminate\Support\Facades\Cache::forget('api_home_sections');
-            \Illuminate\Support\Facades\Cache::put('catalog_cache_ver', (string) hrtime(true), 86400);
-        });
+        static::saved(fn () => \App\Support\StorefrontCache::bump());
+        static::deleted(fn () => \App\Support\StorefrontCache::bump());
     }
 }

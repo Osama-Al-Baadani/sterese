@@ -4,6 +4,8 @@
  * up in the browser bundle. Client code goes through this site's own
  * /api/* route handlers instead, which call these helpers server-side.
  */
+import { STOREFRONT_CACHE_TAG } from "./storefront-cache";
+
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:8001").trim().replace(/\/+$/, "");
 const V2_API_KEY = (process.env.V2_API_KEY ?? "").trim();
 const V2_API_SECRET = (process.env.V2_API_SECRET ?? "").trim();
@@ -78,7 +80,9 @@ export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promi
     method,
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    ...(canCache ? { next: { revalidate: opts.revalidate as number } } : { cache: "no-store" }),
+    ...(canCache
+      ? { next: { revalidate: opts.revalidate as number, tags: [STOREFRONT_CACHE_TAG] } }
+      : { cache: "no-store" }),
     signal: AbortSignal.timeout(12000),
   });
 
@@ -90,4 +94,20 @@ export async function backendFetch<T>(path: string, opts: FetchOpts = {}): Promi
     throw new BackendError(res.status, data);
   }
   return data as T;
+}
+
+/** Lightweight uncached read of the backend's current catalog/config version. */
+export async function fetchBackendStorefrontVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(buildUrl("storefront-version"), {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { version?: unknown };
+    return typeof data?.version === "string" && data.version ? data.version : null;
+  } catch {
+    return null;
+  }
 }

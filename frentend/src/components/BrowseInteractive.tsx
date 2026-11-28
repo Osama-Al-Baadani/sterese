@@ -211,6 +211,39 @@ export default function BrowseInteractive({
     return () => window.clearTimeout(timer);
   }, [categories, handleHoverCategory, selectedId]);
 
+  const latestNavRef = useRef({ selectedId, state });
+  useEffect(() => {
+    latestNavRef.current = { selectedId, state };
+  }, [selectedId, state]);
+
+  // Live refresh active browse results automatically when admin updates products/categories
+  useEffect(() => {
+    const onStorefrontUpdated = async () => {
+      flatCache.clear();
+      groupedCache.clear();
+      inflightFlat.clear();
+      inflightGrouped.clear();
+
+      const { selectedId: curCatId, state: curState } = latestNavRef.current;
+      const seq = ++requestSeq.current;
+      if (shouldShowGrouped(curCatId, curState) && curCatId !== null) {
+        const loaded = await fetchGroupedCached(curCatId);
+        if (seq === requestSeq.current && loaded) {
+          setGroupedSections(loaded);
+        }
+      } else {
+        const loaded = await fetchFlatCached(curState);
+        if (seq === requestSeq.current && loaded) {
+          setProducts(loaded.products);
+          setHasMore(loaded.hasMore);
+        }
+      }
+    };
+
+    window.addEventListener("storefront:updated", onStorefrontUpdated);
+    return () => window.removeEventListener("storefront:updated", onStorefrontUpdated);
+  }, [fetchFlatCached, fetchGroupedCached, shouldShowGrouped]);
+
   const applyNavigationState = useCallback(
     async (nextCatId: number | null, next: BrowseState, historyMode: "push" | "replace" | "none") => {
       const seq = ++requestSeq.current;

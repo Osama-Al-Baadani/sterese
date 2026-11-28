@@ -37,10 +37,7 @@ export async function GET(req: NextRequest) {
     page: Number(sp.get("page") ?? "1") || 1,
     perPage: Number(sp.get("per_page") ?? "24") || 24,
   });
-  return NextResponse.json(
-    products,
-    search
-      ? undefined
-      : { headers: { "Cache-Control": "public, max-age=60, s-maxage=120, stale-while-revalidate=600" } },
-  );
+  return NextResponse.json(products, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

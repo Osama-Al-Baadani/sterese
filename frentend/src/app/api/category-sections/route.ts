@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const sections = await getCategorySections(parentId, perPage);
   return NextResponse.json(sections, {
     headers: {
-      "Cache-Control": "public, max-age=60, s-maxage=180, stale-while-revalidate=600",
+      "Cache-Control": "no-store",
     },
   });
 }

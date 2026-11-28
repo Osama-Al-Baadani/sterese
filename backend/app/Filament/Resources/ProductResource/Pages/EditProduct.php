@@ -63,6 +63,11 @@ class EditProduct extends EditRecord
         return $data;
     }
 
+    protected function afterSave(): void
+    {
+        \App\Support\StorefrontCache::bump();
+    }
+
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');

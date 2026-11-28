@@ -8,6 +8,7 @@ import { linkHref } from "@/lib/types";
 
 export default function HeroCarousel({ banners }: { banners: Banner[] }) {
   const [active, setActive] = useState(0);
+  const safeActive = banners.length > 0 ? active % banners.length : 0;
 
   useEffect(() => {
     if (banners.length < 2) return;
@@ -33,10 +34,10 @@ export default function HeroCarousel({ banners }: { banners: Banner[] }) {
           <Link
             key={b.id}
             href={linkHref(b.link_type, b.link_value)}
-            tabIndex={i === active ? 0 : -1}
-            aria-hidden={i !== active}
+            tabIndex={i === safeActive ? 0 : -1}
+            aria-hidden={i !== safeActive}
             className="absolute inset-0 transition-opacity duration-700"
-            style={{ opacity: i === active ? 1 : 0, pointerEvents: i === active ? "auto" : "none" }}
+            style={{ opacity: i === safeActive ? 1 : 0, pointerEvents: i === safeActive ? "auto" : "none" }}
           >
             {b.image_url && (
               <Image
@@ -61,7 +62,7 @@ export default function HeroCarousel({ banners }: { banners: Banner[] }) {
                   aria-label={`Slide ${i + 1}`}
                   onClick={() => setActive(i)}
                   className={`h-1.5 rounded-full transition-all ${
-                    i === active ? "w-5 bg-white shadow-xs" : "w-1.5 bg-white/60 hover:bg-white/85"
+                    i === safeActive ? "w-5 bg-white shadow-xs" : "w-1.5 bg-white/60 hover:bg-white/85"
                   }`}
                 />
               ))}

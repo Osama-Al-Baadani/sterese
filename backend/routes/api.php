@@ -36,6 +36,9 @@ Route::get('/category-sections', [CatalogController::class, 'categorySections'])
 Route::get('/brands', [CatalogController::class, 'brands']);
 
 // ── App Config & Storefront Sections ─────────────────────────────────────────
+Route::get('/storefront-version', fn () => response()->json([
+    'version' => \App\Support\StorefrontCache::version(),
+])->header('Cache-Control', 'no-store, no-cache, must-revalidate'));
 Route::get('/app-config', [AppConfigController::class, 'index']);
 Route::get('/home-sections', [HomeSectionController::class, 'index']);
 Route::get('/browse-sections', [BrowseSectionController::class, 'index']);

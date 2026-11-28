@@ -5,10 +5,12 @@ import { getMessages, getTranslations, setRequestLocale } from "next-intl/server
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { AuthProvider } from "@/lib/auth-context";
+import { getStorefrontInit } from "@/lib/api";
 import { CartProvider } from "@/lib/cart-context";
 import AiAdvisorChat from "@/components/AiAdvisorChat";
 import CartDrawer from "@/components/CartDrawer";
 import ErrorLogger from "@/components/ErrorLogger";
+import StorefrontLiveSync from "@/components/StorefrontLiveSync";
 import { FavoritesProvider } from "@/lib/favorites-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { safeJsonLd } from "@/lib/format";
@@ -109,7 +111,10 @@ export default async function LocaleLayout({
   // requests — without this a request for /en could render with Arabic
   // strings if an /ar render happened to be cached first.
   setRequestLocale(locale);
-  const messages = await getMessages({ locale }); // Resolve messages for the active locale
+  const [messages, init] = await Promise.all([
+    getMessages({ locale }),
+    getStorefrontInit(),
+  ]);
 
   const dir = locale === "ar" ? "rtl" : "ltr";
   const brand = locale === "ar" ? "المخازن الاقتصادية" : "Al Makhazen Al Eqtisadeya";
@@ -155,6 +160,7 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: safeJsonLd(websiteSchema) }}
         />
         <ErrorLogger />
+        <StorefrontLiveSync initialVersion={init?.version} />
         {/* Pass locale and messages explicitly so client components always match the active route locale */}
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ToastProvider>

@@ -30,6 +30,11 @@ class CreateProduct extends CreateRecord
         return $data;
     }
 
+    protected function afterCreate(): void
+    {
+        \App\Support\StorefrontCache::bump();
+    }
+
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');

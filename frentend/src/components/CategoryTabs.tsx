@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { ancestorChain, buildCategoryIndex } from "@/lib/category-tree";
+import { categoryStyle } from "@/lib/category-style";
 import { localizedName } from "@/lib/i18n-helpers";
 import { Link } from "@/i18n/navigation";
 import type { Category } from "@/lib/types";
@@ -31,6 +33,7 @@ function TabRow({
   moreLabel,
   onSelectCategory,
   onHoverCategory,
+  compact = false,
 }: {
   items: Category[];
   activeId: number | null;
@@ -40,6 +43,7 @@ function TabRow({
   moreLabel: string;
   onSelectCategory?: (categoryId: number | null) => void;
   onHoverCategory?: (categoryId: number | null) => void;
+  compact?: boolean;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -53,17 +57,19 @@ function TabRow({
         type="button"
         onClick={() => scrollBy(240)}
         aria-label={prevLabel}
-        className="hidden shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white p-1 text-navy-500 shadow-sm transition hover:text-brand-700 sm:flex"
+        className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white text-navy-600 shadow-sm transition hover:border-brand-500 hover:text-brand-700 sm:flex"
       >
         <ChevronRight className="h-4 w-4" aria-hidden />
       </button>
 
       <div
         ref={scrollerRef}
-        className="flex min-w-0 flex-1 gap-2 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex min-w-0 flex-1 gap-2.5 overflow-x-auto scroll-smooth px-0.5 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {items.map((c) => {
+        {items.map((c, i) => {
           const active = c.id === activeId;
+          const { Icon } = categoryStyle(c.name, i);
+          const img = c.image?.src;
           return (
             <Link
               key={c.id}
@@ -77,13 +83,41 @@ function TabRow({
                   onSelectCategory(c.id);
                 }
               }}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+              className={`group flex shrink-0 items-center rounded-full border transition-all duration-300 ${
+                compact ? "gap-2 py-1 ps-1 pe-3.5" : "gap-2.5 py-1.5 ps-1.5 pe-4"
+              } ${
                 active
-                  ? "border-brand-600 bg-brand-600 text-white"
-                  : "border-navy-900/10 bg-white text-navy-700 hover:border-brand-300 hover:bg-brand-50"
+                  ? "border-brand-600 bg-brand-50 shadow-[0_6px_16px_-6px_rgba(240,178,31,0.55)] ring-1 ring-brand-600"
+                  : "border-navy-900/10 bg-white shadow-[0_3px_10px_-6px_rgba(26,39,66,0.18)] hover:-translate-y-0.5 hover:border-brand-500/60 hover:shadow-[0_8px_18px_-8px_rgba(26,39,66,0.2)]"
               }`}
             >
-              {localizedName(c, locale)}
+              <span
+                className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-white ${
+                  compact ? "h-8 w-8 p-1" : "h-11 w-11 p-1.5"
+                } ${active ? "border-brand-500" : "border-navy-900/[0.08]"}`}
+              >
+                {img ? (
+                  <Image
+                    src={img}
+                    alt=""
+                    width={48}
+                    height={48}
+                    className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-110"
+                  />
+                ) : (
+                  <Icon
+                    className={`${compact ? "h-4 w-4" : "h-5 w-5"} ${active ? "text-brand-700" : "text-navy-500"}`}
+                    aria-hidden
+                  />
+                )}
+              </span>
+              <span
+                className={`whitespace-nowrap font-extrabold transition-colors ${
+                  compact ? "text-xs" : "text-[13px]"
+                } ${active ? "text-navy-900" : "text-navy-800 group-hover:text-brand-700"}`}
+              >
+                {localizedName(c, locale)}
+              </span>
             </Link>
           );
         })}
@@ -93,7 +127,7 @@ function TabRow({
         type="button"
         onClick={() => scrollBy(-240)}
         aria-label={moreLabel}
-        className="hidden shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white p-1 text-navy-500 shadow-sm transition hover:text-brand-700 sm:flex"
+        className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-navy-900/10 bg-white text-navy-600 shadow-sm transition hover:border-brand-500 hover:text-brand-700 sm:flex"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
       </button>
@@ -164,6 +198,7 @@ export default function CategoryTabs({
           moreLabel={tCommon("showMore")}
           onSelectCategory={onSelectCategory}
           onHoverCategory={onHoverCategory}
+          compact={i > 0}
         />
       ))}
     </div>

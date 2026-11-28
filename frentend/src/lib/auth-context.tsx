@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export interface Customer {
   id: number;
@@ -66,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
-  function persist(nextCustomer: Customer, nextToken: string) {
+  const persist = useCallback((nextCustomer: Customer, nextToken: string) => {
     setCustomer(nextCustomer);
     setAuthToken(nextToken);
     try {
@@ -75,9 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // storage full/blocked — session just won't persist across reloads
     }
-  }
+  }, []);
 
-  async function sendOtp(phone: string) {
+  const sendOtp = useCallback(async (phone: string) => {
     const res = await fetch("/api/auth/send-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,33 +93,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message ?? "تعذّر إرسال رمز التحقق");
-  }
+  }, []);
 
-  async function verifyOtp(phone: string, code: string) {
-    const res = await fetch("/api/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, code }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message ?? "رمز التحقق غير صحيح");
-    persist(toCustomer(data, phone), data.auth_token);
-    return { isNew: data.is_new === true };
-  }
+  const verifyOtp = useCallback(
+    async (phone: string, code: string) => {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "رمز التحقق غير صحيح");
+      persist(toCustomer(data, phone), data.auth_token);
+      return { isNew: data.is_new === true };
+    },
+    [persist],
+  );
 
-  async function setProfileName(firstName: string) {
-    if (!customer || !authToken) return;
-    const res = await fetch(`/api/account/profile`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify({ customer_id: customer.id, first_name: firstName }),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    persist(toCustomer(data, customer.phone), authToken);
-  }
+  const setProfileName = useCallback(
+    async (firstName: string) => {
+      if (!customer || !authToken) return;
+      const res = await fetch(`/api/account/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ customer_id: customer.id, first_name: firstName }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      persist(toCustomer(data, customer.phone), authToken);
+    },
+    [customer, authToken, persist],
+  );
 
-  function logout() {
+  const logout = useCallback(() => {
     setCustomer(null);
     setAuthToken(null);
     try {
@@ -120,24 +134,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-  }
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        customer,
-        authToken,
-        isLoggedIn: !!customer,
-        hydrated,
-        sendOtp,
-        verifyOtp,
-        setProfileName,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      customer,
+      authToken,
+      isLoggedIn: !!customer,
+      hydrated,
+      sendOtp,
+      verifyOtp,
+      setProfileName,
+      logout,
+    }),
+    [customer, authToken, hydrated, sendOtp, verifyOtp, setProfileName, logout],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

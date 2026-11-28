@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@/i18n/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Heart } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useFavorites } from "@/lib/favorites-context";
@@ -13,22 +13,51 @@ export default function FavoritesView() {
   const t = useTranslations("favorites");
   const tCommon = useTranslations("common");
   const { ids, hydrated } = useFavorites();
-  const [products, setProducts] = useState<Product[] | null>(null);
+  const [catalog, setCatalog] = useState<Record<number, Product | null>>({});
+
+  const missingKey = useMemo(
+    () => ids.filter((id) => !(id in catalog)).join(","),
+    [ids, catalog],
+  );
 
   useEffect(() => {
-    if (!hydrated) return;
-    if (ids.length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setProducts([]);
-      return;
-    }
-    fetch(`/api/products?ids=${ids.join(",")}`)
-      .then((r) => r.json())
-      .then((data) => setProducts(Array.isArray(data) ? data : []))
-      .catch(() => setProducts([]));
-  }, [ids, hydrated]);
+    if (!hydrated || !missingKey) return;
+    const controller = new AbortController();
+    const requestedIds = missingKey.split(",").map(Number);
 
-  if (!hydrated || products === null) {
+    fetch(`/api/products?ids=${missingKey}`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: unknown) => {
+        const list = Array.isArray(data) ? (data as Product[]) : [];
+        const byId = new Map(list.map((p) => [p.id, p]));
+        setCatalog((prev) => {
+          const next = { ...prev };
+          for (const id of requestedIds) {
+            next[id] = byId.get(id) ?? null;
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setCatalog((prev) => {
+          const next = { ...prev };
+          for (const id of requestedIds) {
+            if (!(id in next)) next[id] = null;
+          }
+          return next;
+        });
+      });
+
+    return () => controller.abort();
+  }, [hydrated, missingKey]);
+
+  const products = useMemo(
+    () => ids.map((id) => catalog[id]).filter((p): p is Product => Boolean(p)),
+    [ids, catalog],
+  );
+
+  if (!hydrated || (ids.length > 0 && products.length === 0 && Boolean(missingKey))) {
     return <div className="py-20 text-center text-navy-400">{t("loading")}</div>;
   }
 

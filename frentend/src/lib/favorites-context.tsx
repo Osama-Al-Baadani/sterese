@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 interface FavoritesContextValue {
   ids: number[];
@@ -9,51 +18,144 @@ interface FavoritesContextValue {
   toggle: (id: number) => void;
 }
 
-const FavoritesContext = createContext<FavoritesContextValue | null>(null);
+interface FavoritesSnapshot {
+  ids: number[];
+  hydrated: boolean;
+}
+
+interface FavoritesStore {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => FavoritesSnapshot;
+  getServerSnapshot: () => FavoritesSnapshot;
+  has: (id: number) => boolean;
+  getCount: () => number;
+  toggle: (id: number) => void;
+  hydrate: () => void;
+}
+
 const STORAGE_KEY = "storeseco_favorites_v1";
+const EMPTY_IDS: number[] = [];
+const SERVER_SNAPSHOT: FavoritesSnapshot = { ids: EMPTY_IDS, hydrated: false };
 
-export function FavoritesProvider({ children }: { children: ReactNode }) {
-  const [ids, setIds] = useState<number[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+function createFavoritesStore(): FavoritesStore {
+  let ids: number[] = EMPTY_IDS;
+  let idSet = new Set<number>();
+  let hydrated = false;
+  let snapshot: FavoritesSnapshot = SERVER_SNAPSHOT;
+  const listeners = new Set<() => void>();
 
-  // Same hydration-safe pattern as CartProvider — loaded one tick after
-  // mount so this render's output doesn't diverge from the server's.
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setIds(JSON.parse(raw));
-    } catch {
-      // corrupted/blocked storage — start from no favorites
-    }
-    setHydrated(true);
-  }, []);
+  const emit = () => {
+    for (const listener of listeners) listener();
+  };
 
-  useEffect(() => {
+  const persist = () => {
     if (!hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
     } catch {
       // storage full/blocked — favorites just won't persist across reloads
     }
-  }, [ids, hydrated]);
+  };
 
-  // A Set makes every heart button's "is this favorited?" check O(1) instead
-  // of scanning the array once per product card on the page.
-  const idSet = useMemo(() => new Set(ids), [ids]);
-  const isFavorite = useCallback((id: number) => idSet.has(id), [idSet]);
+  const hydrate = () => {
+    if (hydrated) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          ids = parsed.filter((x): x is number => typeof x === "number");
+          idSet = new Set(ids);
+        }
+      }
+    } catch {
+      // corrupted/blocked storage — start from no favorites
+    }
+    hydrated = true;
+    snapshot = { ids, hydrated };
+    emit();
+  };
 
-  const toggle = useCallback((id: number) => {
-    setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }, []);
+  const toggle = (id: number) => {
+    if (idSet.has(id)) {
+      ids = ids.filter((x) => x !== id);
+    } else {
+      ids = [...ids, id];
+    }
+    idSet = new Set(ids);
+    snapshot = { ids, hydrated };
+    persist();
+    emit();
+  };
 
-  const value = useMemo(() => ({ ids, hydrated, isFavorite, toggle }), [ids, hydrated, isFavorite, toggle]);
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => snapshot,
+    getServerSnapshot: () => SERVER_SNAPSHOT,
+    has: (id) => idSet.has(id),
+    getCount: () => ids.length,
+    toggle,
+    hydrate,
+  };
+}
 
-  return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
+const FavoritesStoreContext = createContext<FavoritesStore | null>(null);
+
+function useFavoritesStore(): FavoritesStore {
+  const store = useContext(FavoritesStoreContext);
+  if (!store) throw new Error("useFavorites must be used within a FavoritesProvider");
+  return store;
+}
+
+export function FavoritesProvider({ children }: { children: ReactNode }) {
+  const [store] = useState(createFavoritesStore);
+
+  // Hydrated one tick after mount so the first client render matches SSR.
+  useEffect(() => {
+    store.hydrate();
+  }, [store]);
+
+  return (
+    <FavoritesStoreContext.Provider value={store}>
+      {children}
+    </FavoritesStoreContext.Provider>
+  );
+}
+
+/** Selective hook for a single product card — only re-renders when THIS product's favorite status flips. */
+export function useFavoriteItem(productId: number): {
+  active: boolean;
+  toggle: (id: number) => void;
+} {
+  const store = useFavoritesStore();
+  const active = useSyncExternalStore(
+    store.subscribe,
+    () => store.has(productId),
+    () => false,
+  );
+  return { active, toggle: store.toggle };
+}
+
+/** Selective hook for header/bottom-nav badges — only re-renders when total favorite count changes. */
+export function useFavoritesCount(): number {
+  const store = useFavoritesStore();
+  return useSyncExternalStore(store.subscribe, store.getCount, () => 0);
 }
 
 export function useFavorites(): FavoritesContextValue {
-  const ctx = useContext(FavoritesContext);
-  if (!ctx) throw new Error("useFavorites must be used within a FavoritesProvider");
-  return ctx;
+  const store = useFavoritesStore();
+  const { ids, hydrated } = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getServerSnapshot,
+  );
+  const isFavorite = useCallback((id: number) => store.has(id), [store]);
+
+  return useMemo(
+    () => ({ ids, hydrated, isFavorite, toggle: store.toggle }),
+    [ids, hydrated, isFavorite, store.toggle],
+  );
 }

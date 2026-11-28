@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Heart } from "lucide-react";
-import { useFavorites } from "@/lib/favorites-context";
+import { useFavoriteItem } from "@/lib/favorites-context";
 import { useToast } from "@/lib/toast-context";
 
 export default function FavoriteButton({
@@ -13,9 +13,8 @@ export default function FavoriteButton({
   size?: "default" | "sm";
 }) {
   const tCommon = useTranslations("common");
-  const { isFavorite, toggle } = useFavorites();
+  const { active, toggle } = useFavoriteItem(productId);
   const { showToast } = useToast();
-  const active = isFavorite(productId);
   const dim = size === "sm" ? "h-8 w-8" : "h-11 w-11";
   const iconDim = size === "sm" ? "h-4 w-4" : "h-5 w-5";
 
@@ -24,6 +23,7 @@ export default function FavoriteButton({
       type="button"
       onClick={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         toggle(productId);
         showToast(active ? tCommon("removedFavoriteToast") : tCommon("addedFavoriteToast"), active ? "info" : "success");
       }}

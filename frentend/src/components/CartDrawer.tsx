@@ -5,11 +5,17 @@ import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Minus, PackageX, Plus, ShoppingBag, Trash2, Truck, X } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { useCart } from "@/lib/cart-context";
+import { useCart, useCartDrawerOpen } from "@/lib/cart-context";
 import { localizedName } from "@/lib/i18n-helpers";
 import SarPrice from "./SarPrice";
 
 export default function CartDrawer() {
+  const drawerOpen = useCartDrawerOpen();
+  if (!drawerOpen) return null;
+  return <CartDrawerPanel />;
+}
+
+function CartDrawerPanel() {
   const locale = useLocale();
   const t = useTranslations("cart");
   const tCommon = useTranslations("common");
@@ -18,7 +24,6 @@ export default function CartDrawer() {
     count,
     subtotal,
     storeSettings,
-    drawerOpen,
     closeDrawer,
     setQuantity,
     removeItem,
@@ -27,7 +32,6 @@ export default function CartDrawer() {
   } = useCart();
 
   useEffect(() => {
-    if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeDrawer();
     };
@@ -37,9 +41,7 @@ export default function CartDrawer() {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [drawerOpen, closeDrawer]);
-
-  if (!drawerOpen) return null;
+  }, [closeDrawer]);
 
   const freeThreshold = storeSettings.free_shipping_threshold || 0;
   const freeRemaining = Math.max(0, freeThreshold - subtotal);

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useLocale } from "next-intl";
 import { Bot, ExternalLink, Loader2, PackageX, Send, Sparkles, X } from "lucide-react";
 import { Link, usePathname } from "@/i18n/navigation";
-import { useCart } from "@/lib/cart-context";
+import { useCartDrawerOpen } from "@/lib/cart-context";
 import SarPrice from "./SarPrice";
 
 interface ChatProduct {
@@ -28,7 +28,7 @@ interface Message {
 export default function AiAdvisorChat() {
   const locale = useLocale();
   const pathname = usePathname();
-  const { drawerOpen } = useCart();
+  const drawerOpen = useCartDrawerOpen();
   const isAr = locale === "ar";
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");

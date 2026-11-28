@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Minus, Plus, ShoppingCart } from "lucide-react";
-import { useCart } from "@/lib/cart-context";
+import { useCartActions, useCartMaxQty, useCartProductQty } from "@/lib/cart-context";
 import { useToast } from "@/lib/toast-context";
 import type { Product } from "@/lib/types";
 
@@ -18,10 +18,10 @@ export default function AddToCartButton({
   iconOnly?: boolean;
 }) {
   const tCommon = useTranslations("common");
-  const { items, addItem, setQuantity, maxQtyFor } = useCart();
+  const quantity = useCartProductQty(product.id);
+  const maxQty = useCartMaxQty(product);
+  const { addItem, setQuantity } = useCartActions();
   const { showToast } = useToast();
-  const inCart = items.find((i) => i.product.id === product.id);
-  const maxQty = maxQtyFor(product);
 
   if (disabled) {
     if (iconOnly) {
@@ -55,25 +55,25 @@ export default function AddToCartButton({
   // Once the product is in the cart, the button becomes the quantity
   // stepper itself — it always reflects the real cart quantity rather than
   // a separate "how many to add" count that resets after adding.
-  if (inCart) {
+  if (quantity > 0) {
     if (iconOnly) {
       return (
         <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-xl border border-brand-600 bg-brand-50 px-1 shadow-xs">
           <button
             type="button"
-            onClick={() => setQuantity(product.id, inCart.quantity - 1)}
+            onClick={() => setQuantity(product.id, quantity - 1)}
             className="flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100"
             aria-label={tCommon("decreaseQty")}
           >
             <Minus className="h-3 w-3" aria-hidden />
           </button>
           <span className="min-w-[1.1rem] text-center text-xs font-bold text-navy-900">
-            {inCart.quantity}
+            {quantity}
           </span>
           <button
             type="button"
-            onClick={() => setQuantity(product.id, inCart.quantity + 1)}
-            disabled={inCart.quantity >= maxQty}
+            onClick={() => setQuantity(product.id, quantity + 1)}
+            disabled={quantity >= maxQty}
             className="flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100 disabled:opacity-40"
             aria-label={tCommon("increaseQty")}
           >
@@ -92,7 +92,7 @@ export default function AddToCartButton({
       >
         <button
           type="button"
-          onClick={() => setQuantity(product.id, inCart.quantity - 1)}
+          onClick={() => setQuantity(product.id, quantity - 1)}
           className={
             compact
               ? "flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100"
@@ -103,12 +103,12 @@ export default function AddToCartButton({
           <Minus className={compact ? "h-3 w-3" : "h-4 w-4"} aria-hidden />
         </button>
         <span className={compact ? "text-xs font-bold text-navy-900" : "font-bold text-navy-900"}>
-          {inCart.quantity}
+          {quantity}
         </span>
         <button
           type="button"
-          onClick={() => setQuantity(product.id, inCart.quantity + 1)}
-          disabled={inCart.quantity >= maxQty}
+          onClick={() => setQuantity(product.id, quantity + 1)}
+          disabled={quantity >= maxQty}
           className={
             compact
               ? "flex h-6 w-6 items-center justify-center rounded-lg text-brand-700 hover:bg-brand-100 disabled:opacity-40"

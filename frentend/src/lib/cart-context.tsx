@@ -2,12 +2,11 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { effectiveMaxQty } from "./cart-limits";
@@ -28,7 +27,23 @@ export interface CartChange {
   quantityAdjusted?: boolean;
 }
 
-interface CartContextValue {
+export interface CartActions {
+  openDrawer: () => void;
+  closeDrawer: () => void;
+  addItem: (
+    product: Product,
+    quantity?: number,
+    variation?: { id: number; label: string; price?: string; image?: string | null },
+  ) => void;
+  removeItem: (productId: number) => void;
+  setQuantity: (productId: number, quantity: number, variationId?: number | null) => void;
+  clear: () => void;
+  refresh: () => Promise<void>;
+  removeUnavailable: () => void;
+  dismissChanges: () => void;
+}
+
+interface CartContextValue extends CartActions {
   items: CartItem[];
   count: number;
   /** Subtotal of purchasable lines only — unavailable items never count. */
@@ -36,28 +51,34 @@ interface CartContextValue {
   hydrated: boolean;
   storeSettings: StoreSettings;
   drawerOpen: boolean;
-  openDrawer: () => void;
-  closeDrawer: () => void;
-  addItem: (product: Product, quantity?: number, variation?: { id: number; label: string; price?: string; image?: string | null }) => void;
-  removeItem: (productId: number) => void;
-  setQuantity: (productId: number, quantity: number) => void;
   maxQtyFor: (product: Product) => number;
-  clear: () => void;
   /** True while the cart is being re-validated against the server. */
   syncing: boolean;
   /** Per-product changes found by the last sync (price moved, sold out...). */
   changes: Record<number, CartChange>;
   /** Cart lines that can no longer be bought (deleted or out of stock). */
   unavailableIds: number[];
-  /** Re-fetches live price & stock for every cart line. */
-  refresh: () => Promise<void>;
-  removeUnavailable: () => void;
-  dismissChanges: () => void;
 }
 
-const CartContext = createContext<CartContextValue | null>(null);
+interface CartStore {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => CartContextValue;
+  getServerSnapshot: () => CartContextValue;
+  getProductQty: (productId: number) => number;
+  getVariationQty: (productId: number, variationId: number | null) => number;
+  getCount: () => number;
+  getDrawerOpen: () => boolean;
+  getHydrated: () => boolean;
+  maxQtyFor: (product: Product) => number;
+  actions: CartActions;
+  hydrate: () => void;
+}
 
 const STORAGE_KEY = "storeseco_cart_v1";
+const EMPTY_ITEMS: CartItem[] = [];
+const EMPTY_UNAVAILABLE: number[] = [];
+const EMPTY_CHANGES: Record<number, CartChange> = {};
+const EMPTY_LIMITS: Record<string, number> = {};
 
 const DEFAULT_STORE_SETTINGS: StoreSettings = {
   delivery_fee: 0,
@@ -87,72 +108,45 @@ function unitPrice(product: Product): number {
   return Number(product.price) || 0;
 }
 
-export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-  const [storeSettings, setStoreSettings] = useState(DEFAULT_STORE_SETTINGS);
-  const [productQtyLimits, setProductQtyLimits] = useState<Record<string, number>>({});
-  const [syncing, setSyncing] = useState(false);
-  const [changes, setChanges] = useState<Record<number, CartChange>>({});
-  const [missingIds, setMissingIds] = useState<number[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+function createCartStore(): CartStore {
+  let items: CartItem[] = EMPTY_ITEMS;
+  let hydrated = false;
+  let storeSettings: StoreSettings = DEFAULT_STORE_SETTINGS;
+  let productQtyLimits: Record<string, number> = EMPTY_LIMITS;
+  let syncing = false;
+  let changes: Record<number, CartChange> = EMPTY_CHANGES;
+  let missingIds: number[] = EMPTY_UNAVAILABLE;
+  let drawerOpen = false;
+  let count = 0;
 
-  const openDrawer = useCallback(() => setDrawerOpen(true), []);
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const listeners = new Set<() => void>();
 
-  // Deliberately loaded in an effect, one tick after mount, rather than in
-  // a lazy useState initializer: reading localStorage during the initial
-  // render would make that render's output diverge from what the server
-  // sent (which always renders an empty cart, having no access to this
-  // browser's storage), producing a hydration mismatch.
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setItems(JSON.parse(raw));
-    } catch {
-      // corrupted/blocked storage — start from an empty cart
-    }
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
+  const persist = () => {
     if (!hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     } catch {
       // storage full/blocked — cart just won't persist across reloads
     }
-  }, [items, hydrated]);
+  };
 
-  // Quantity limits (global default + per-product) so repeated "add to
-  // cart" taps and the cart page's own +/- steppers can't build up past
-  // what the admin panel actually allows — server-rendered pages already
-  // get this via getAppConfig(), but this client-only context needs its
-  // own fetch.
-  useEffect(() => {
-    fetch("/api/app-config")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.storeSettings) setStoreSettings(data.storeSettings);
-        if (data.productQtyLimits) setProductQtyLimits(data.productQtyLimits);
-      })
-      .catch(() => {
-        // stays at the permissive defaults — better than blocking the cart
-      });
-  }, []);
+  const maxQtyFor = (product: Product) =>
+    effectiveMaxQty(product, storeSettings, productQtyLimits);
 
-  const maxQtyFor = useCallback(
-    (product: Product) => effectiveMaxQty(product, storeSettings, productQtyLimits),
-    [storeSettings, productQtyLimits],
-  );
-
-  const addItem = useCallback(
-    (
-      product: Product,
-      quantity = 1,
-      variation?: { id: number; label: string; price?: string; image?: string | null },
-    ) => {
+  const actions: CartActions = {
+    openDrawer() {
+      if (drawerOpen) return;
+      drawerOpen = true;
+      rebuildSnapshot();
+      emit();
+    },
+    closeDrawer() {
+      if (!drawerOpen) return;
+      drawerOpen = false;
+      rebuildSnapshot();
+      emit();
+    },
+    addItem(product, quantity = 1, variation) {
       const effectiveProduct: Product = variation
         ? {
             ...product,
@@ -161,20 +155,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         : product;
 
-      setItems((prev) => {
-        const max = effectiveMaxQty(effectiveProduct, storeSettings, productQtyLimits);
-        const existing = prev.find(
-          (i) => i.product.id === product.id && (i.variationId ?? null) === (variation?.id ?? null),
+      const max = effectiveMaxQty(effectiveProduct, storeSettings, productQtyLimits);
+      const existing = items.find(
+        (i) => i.product.id === product.id && (i.variationId ?? null) === (variation?.id ?? null),
+      );
+      if (existing) {
+        items = items.map((i) =>
+          i.product.id === product.id && (i.variationId ?? null) === (variation?.id ?? null)
+            ? { ...i, quantity: Math.min(i.quantity + quantity, max) }
+            : i,
         );
-        if (existing) {
-          return prev.map((i) =>
-            i.product.id === product.id && (i.variationId ?? null) === (variation?.id ?? null)
-              ? { ...i, quantity: Math.min(i.quantity + quantity, max) }
-              : i,
-          );
-        }
-        return [
-          ...prev,
+      } else {
+        items = [
+          ...items,
           {
             product: effectiveProduct,
             quantity: Math.min(quantity, max),
@@ -182,186 +175,293 @@ export function CartProvider({ children }: { children: ReactNode }) {
             variationLabel: variation?.label,
           },
         ];
-      });
+      }
+      persist();
+      rebuildSnapshot();
+      emit();
     },
-    [storeSettings, productQtyLimits],
-  );
+    removeItem(productId) {
+      items = items.filter((i) => i.product.id !== productId);
+      persist();
+      rebuildSnapshot();
+      emit();
+    },
+    setQuantity(productId, quantity, variationId) {
+      const matches = (i: CartItem) =>
+        variationId === undefined
+          ? i.product.id === productId
+          : i.product.id === productId && (i.variationId ?? null) === variationId;
 
-  const removeItem = useCallback((productId: number) => {
-    setItems((prev) => prev.filter((i) => i.product.id !== productId));
-  }, []);
-
-  const setQuantity = useCallback(
-    (productId: number, quantity: number) => {
-      setItems((prev) => {
-        if (quantity <= 0) return prev.filter((i) => i.product.id !== productId);
-        return prev.map((i) =>
-          i.product.id === productId
-            ? { ...i, quantity: Math.min(quantity, effectiveMaxQty(i.product, storeSettings, productQtyLimits)) }
+      if (quantity <= 0) {
+        items = items.filter((i) => !matches(i));
+      } else {
+        items = items.map((i) =>
+          matches(i)
+            ? {
+                ...i,
+                quantity: Math.min(
+                  quantity,
+                  effectiveMaxQty(i.product, storeSettings, productQtyLimits),
+                ),
+              }
             : i,
         );
-      });
-    },
-    [storeSettings, productQtyLimits],
-  );
-
-  const clear = useCallback(() => {
-    setItems([]);
-    setChanges({});
-    setMissingIds([]);
-  }, []);
-
-  /** Lines that can't be purchased anymore: deleted/unpublished on the
-   * server (missing from the last sync) or flagged out of stock. */
-  const unavailableIds = useMemo(
-    () =>
-      items
-        .filter((i) => missingIds.includes(i.product.id) || i.product.stock_status === "outofstock")
-        .map((i) => i.product.id),
-    [items, missingIds],
-  );
-
-  /**
-   * localStorage keeps a *snapshot* of each product from the moment it was
-   * added, so a cart opened days later could show (and charge) an old price
-   * or include something that has since sold out. This re-reads the live
-   * product data and reconciles the cart with it, recording what changed so
-   * the UI can tell the customer instead of silently altering their order.
-   */
-  const refresh = useCallback(async () => {
-    if (items.length === 0) return;
-    const ids = items.map((i) => i.product.id).slice(0, 100);
-    setSyncing(true);
-    try {
-      const res = await fetch(`/api/products?ids=${ids.join(",")}&fresh=1`, { cache: "no-store" });
-      if (!res.ok) return;
-      const fresh: unknown = await res.json();
-      if (!Array.isArray(fresh) || fresh.length === 0) return;
-
-      const byId = new Map<number, Product>((fresh as Product[]).map((p) => [p.id, p]));
-      const nextChanges: Record<number, CartChange> = {};
-      const missing: number[] = [];
-
-      for (const item of items) {
-        const live = byId.get(item.product.id);
-        if (!live) {
-          missing.push(item.product.id);
-          nextChanges[item.product.id] = { unavailable: true };
-          continue;
-        }
-        const change: CartChange = {};
-        if (Number(live.price) !== Number(item.product.price)) {
-          change.oldPrice = item.product.price;
-          change.newPrice = live.price;
-        }
-        if (live.stock_status === "outofstock") change.unavailable = true;
-        if (item.quantity > effectiveMaxQty(live, storeSettings, productQtyLimits)) change.quantityAdjusted = true;
-        if (Object.keys(change).length > 0) nextChanges[live.id] = change;
       }
+      persist();
+      rebuildSnapshot();
+      emit();
+    },
+    clear() {
+      items = EMPTY_ITEMS;
+      changes = EMPTY_CHANGES;
+      missingIds = EMPTY_UNAVAILABLE;
+      persist();
+      rebuildSnapshot();
+      emit();
+    },
+    async refresh() {
+      if (items.length === 0) return;
+      const ids = items.map((i) => i.product.id).slice(0, 100);
+      syncing = true;
+      rebuildSnapshot();
+      emit();
+      try {
+        const res = await fetch(`/api/products?ids=${ids.join(",")}&fresh=1`, { cache: "no-store" });
+        if (!res.ok) return;
+        const fresh: unknown = await res.json();
+        if (!Array.isArray(fresh) || fresh.length === 0) return;
 
-      setItems((prev) =>
-        prev.map((i) => {
+        const byId = new Map<number, Product>((fresh as Product[]).map((p) => [p.id, p]));
+        const nextChanges: Record<number, CartChange> = {};
+        const missing: number[] = [];
+
+        for (const item of items) {
+          const live = byId.get(item.product.id);
+          if (!live) {
+            missing.push(item.product.id);
+            nextChanges[item.product.id] = { unavailable: true };
+            continue;
+          }
+          const change: CartChange = {};
+          if (Number(live.price) !== Number(item.product.price)) {
+            change.oldPrice = item.product.price;
+            change.newPrice = live.price;
+          }
+          if (live.stock_status === "outofstock") change.unavailable = true;
+          if (item.quantity > effectiveMaxQty(live, storeSettings, productQtyLimits)) {
+            change.quantityAdjusted = true;
+          }
+          if (Object.keys(change).length > 0) nextChanges[live.id] = change;
+        }
+
+        items = items.map((i) => {
           const live = byId.get(i.product.id);
           if (!live) return i;
-          return { product: live, quantity: Math.min(i.quantity, effectiveMaxQty(live, storeSettings, productQtyLimits)) };
-        }),
+          return {
+            ...i,
+            product: live,
+            quantity: Math.min(i.quantity, effectiveMaxQty(live, storeSettings, productQtyLimits)),
+          };
+        });
+        missingIds = missing;
+        changes = nextChanges;
+        persist();
+      } catch {
+        // offline / transient error — keep showing the saved snapshot
+      } finally {
+        syncing = false;
+        rebuildSnapshot();
+        emit();
+      }
+    },
+    removeUnavailable() {
+      items = items.filter(
+        (i) => !(missingIds.includes(i.product.id) || i.product.stock_status === "outofstock"),
       );
-      setMissingIds(missing);
-      setChanges(nextChanges);
-    } catch {
-      // offline / transient error — keep showing the saved snapshot
-    } finally {
-      setSyncing(false);
-    }
-  }, [items, storeSettings, productQtyLimits]);
-
-  const removeUnavailable = useCallback(() => {
-    setItems((prev) => prev.filter((i) => !(missingIds.includes(i.product.id) || i.product.stock_status === "outofstock")));
-    setMissingIds([]);
-    setChanges((prev) => {
-      const next = { ...prev };
-      for (const [id, c] of Object.entries(prev)) {
+      missingIds = EMPTY_UNAVAILABLE;
+      const next = { ...changes };
+      for (const [id, c] of Object.entries(changes)) {
         if (c.unavailable) delete next[Number(id)];
       }
-      return next;
-    });
-  }, [missingIds]);
+      changes = next;
+      persist();
+      rebuildSnapshot();
+      emit();
+    },
+    dismissChanges() {
+      changes = EMPTY_CHANGES;
+      rebuildSnapshot();
+      emit();
+    },
+  };
 
-  const dismissChanges = useCallback(() => setChanges({}), []);
+  const buildValue = (): CartContextValue => {
+    const unavailableIds = items
+      .filter((i) => missingIds.includes(i.product.id) || i.product.stock_status === "outofstock")
+      .map((i) => i.product.id);
+    count = items.reduce((s, i) => s + i.quantity, 0);
+    const subtotal = items
+      .filter((i) => !unavailableIds.includes(i.product.id))
+      .reduce((s, i) => s + unitPrice(i.product) * i.quantity, 0);
 
-  const { count, subtotal } = useMemo(
-    () => ({
-      count: items.reduce((s, i) => s + i.quantity, 0),
-      subtotal: items
-        .filter((i) => !unavailableIds.includes(i.product.id))
-        .reduce((s, i) => s + unitPrice(i.product) * i.quantity, 0),
-    }),
-    [items, unavailableIds],
-  );
-
-  const value = useMemo<CartContextValue>(
-    () => ({
+    return {
       items,
       count,
       subtotal,
       hydrated,
       storeSettings,
       drawerOpen,
-      openDrawer,
-      closeDrawer,
-      addItem,
-      removeItem,
-      setQuantity,
       maxQtyFor,
-      clear,
       syncing,
       changes,
-      unavailableIds,
-      refresh,
-      removeUnavailable,
-      dismissChanges,
-    }),
-    [
-      items,
-      count,
-      subtotal,
-      hydrated,
-      storeSettings,
-      drawerOpen,
-      openDrawer,
-      closeDrawer,
-      addItem,
-      removeItem,
-      setQuantity,
-      maxQtyFor,
-      clear,
-      syncing,
-      changes,
-      unavailableIds,
-      refresh,
-      removeUnavailable,
-      dismissChanges,
-    ],
-  );
+      unavailableIds: unavailableIds.length === 0 ? EMPTY_UNAVAILABLE : unavailableIds,
+      ...actions,
+    };
+  };
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  const serverSnapshot = buildValue();
+  let snapshot: CartContextValue = serverSnapshot;
+
+  function rebuildSnapshot() {
+    snapshot = buildValue();
+  }
+
+  function emit() {
+    for (const listener of listeners) listener();
+  }
+
+  const hydrate = () => {
+    if (hydrated) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (Array.isArray(parsed)) items = parsed as CartItem[];
+      }
+    } catch {
+      // corrupted/blocked storage — start from an empty cart
+    }
+    hydrated = true;
+    rebuildSnapshot();
+    emit();
+
+    fetch("/api/app-config")
+      .then((r) => r.json())
+      .then((data) => {
+        let updated = false;
+        if (data.storeSettings) {
+          storeSettings = data.storeSettings;
+          updated = true;
+        }
+        if (data.productQtyLimits) {
+          productQtyLimits = data.productQtyLimits;
+          updated = true;
+        }
+        if (updated) {
+          rebuildSnapshot();
+          emit();
+        }
+      })
+      .catch(() => {
+        // stays at the permissive defaults — better than blocking the cart
+      });
+  };
+
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => snapshot,
+    getServerSnapshot: () => serverSnapshot,
+    getProductQty: (productId) => items.find((i) => i.product.id === productId)?.quantity ?? 0,
+    getVariationQty: (productId, variationId) =>
+      items.find(
+        (i) => i.product.id === productId && (i.variationId ?? null) === (variationId ?? null),
+      )?.quantity ?? 0,
+    getCount: () => count,
+    getDrawerOpen: () => drawerOpen,
+    getHydrated: () => hydrated,
+    maxQtyFor,
+    actions,
+    hydrate,
+  };
+}
+
+const CartStoreContext = createContext<CartStore | null>(null);
+
+function useCartStore(): CartStore {
+  const store = useContext(CartStoreContext);
+  if (!store) throw new Error("useCart must be used within a CartProvider");
+  return store;
+}
+
+export function CartProvider({ children }: { children: ReactNode }) {
+  const [store] = useState(createCartStore);
+
+  // Loaded one tick after mount so the first client render matches SSR.
+  useEffect(() => {
+    store.hydrate();
+  }, [store]);
+
+  return <CartStoreContext.Provider value={store}>{children}</CartStoreContext.Provider>;
+}
+
+/** Selective hook for product cards — only re-renders when THIS product's quantity changes. */
+export function useCartProductQty(productId: number, variationId?: number | null): number {
+  const store = useCartStore();
+  return useSyncExternalStore(
+    store.subscribe,
+    () =>
+      variationId === undefined
+        ? store.getProductQty(productId)
+        : store.getVariationQty(productId, variationId),
+    () => 0,
+  );
+}
+
+/** Selective hook for max quantity of a product — only re-renders if store qty limits change. */
+export function useCartMaxQty(product: Product): number {
+  const store = useCartStore();
+  return useSyncExternalStore(
+    store.subscribe,
+    () => store.maxQtyFor(product),
+    () => effectiveMaxQty(product, DEFAULT_STORE_SETTINGS, EMPTY_LIMITS),
+  );
+}
+
+/** Stable cart action callbacks — never causes a re-render when cart state changes. */
+export function useCartActions(): CartActions {
+  return useCartStore().actions;
+}
+
+/** Selective hook for header/bottom-nav cart badges — only re-renders when total item count changes. */
+export function useCartCount(): number {
+  const store = useCartStore();
+  return useSyncExternalStore(store.subscribe, store.getCount, () => 0);
+}
+
+/** Selective hook for drawer visibility — only re-renders when the cart drawer opens or closes. */
+export function useCartDrawerOpen(): boolean {
+  const store = useCartStore();
+  return useSyncExternalStore(store.subscribe, store.getDrawerOpen, () => false);
 }
 
 export function useCart(): CartContextValue {
-  const ctx = useContext(CartContext);
-  if (!ctx) throw new Error("useCart must be used within a CartProvider");
-  return ctx;
+  const store = useCartStore();
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
 }
 
 /** Re-validates the cart against live prices/stock once per mount — call it
  * from the cart and checkout screens (the two places a stale snapshot hurts). */
 export function useCartSync() {
-  const { hydrated, refresh } = useCart();
+  const store = useCartStore();
+  const hydrated = useSyncExternalStore(store.subscribe, store.getHydrated, () => false);
   const done = useRef(false);
 
   useEffect(() => {
     if (!hydrated || done.current) return;
     done.current = true;
-    void refresh();
-  }, [hydrated, refresh]);
+    void store.actions.refresh();
+  }, [hydrated, store]);
 }

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { Star } from "lucide-react";
@@ -9,7 +10,7 @@ import FavoriteButton from "./FavoriteButton";
 import ProductCardImageSlider from "./ProductCardImageSlider";
 import SarPrice from "./SarPrice";
 
-export default function ProductCard({ product, locale }: { product: Product; locale: string }) {
+function ProductCard({ product, locale }: { product: Product; locale: string }) {
   const tCommon = useTranslations("common");
   const outOfStock = product.stock_status === "outofstock";
   const rating = Number(product.average_rating);
@@ -39,52 +40,54 @@ export default function ProductCard({ product, locale }: { product: Product; loc
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-navy-900/[0.07] bg-white transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-500/45 hover:shadow-[0_10px_24px_-8px_rgba(26,39,66,0.14)]">
       {/* Image area */}
-      <Link
-        href={`/product/${product.id}`}
-        className="relative block aspect-square overflow-hidden border-b border-navy-900/[0.05] bg-white"
-      >
-        <ProductCardImageSlider images={product.images} name={name} />
+      <div className="relative aspect-square overflow-hidden border-b border-navy-900/[0.05] bg-white">
+        <Link
+          href={`/product/${product.id}`}
+          className="relative block h-full w-full"
+        >
+          <ProductCardImageSlider images={product.images} name={name} />
 
-        {/* Discount & Bundle Badges */}
-        <div className="absolute top-2 end-2 z-10 flex flex-col items-end gap-1">
-          {product.on_sale && (
-            <span className="rounded-md bg-rose-600 px-1.5 py-0.5 text-[10px] font-black tracking-tight text-white shadow-sm">
-              {discountPct > 0 ? `-${discountPct}%` : tCommon("sale")}
+          {/* Discount & Bundle Badges */}
+          <div className="absolute top-2 end-2 z-10 flex flex-col items-end gap-1">
+            {product.on_sale && (
+              <span className="rounded-md bg-rose-600 px-1.5 py-0.5 text-[10px] font-black tracking-tight text-white shadow-sm">
+                {discountPct > 0 ? `-${discountPct}%` : tCommon("sale")}
+              </span>
+            )}
+            {bundle && (
+              <span className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[9px] font-extrabold text-white shadow-sm">
+                {bundle}
+              </span>
+            )}
+          </div>
+
+          {/* Low Stock Pill */}
+          {lowStockQty && (
+            <span className="absolute bottom-2 start-2 z-10 rounded-full bg-amber-500/95 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-sm backdrop-blur-xs">
+              {locale === "ar" ? `باقي ${lowStockQty} فقط` : `Only ${lowStockQty} left`}
             </span>
           )}
-          {bundle && (
-            <span className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[9px] font-extrabold text-white shadow-sm">
-              {bundle}
+
+          {/* Rating Pill floating cleanly at bottom-end of image */}
+          {rating > 0 && (
+            <span className="absolute bottom-2 end-2 z-10 flex items-center gap-0.5 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-extrabold text-navy-900 shadow-sm backdrop-blur-xs">
+              <Star className="h-2.5 w-2.5 fill-gold-500 text-gold-500" aria-hidden />
+              {rating.toFixed(1)}
             </span>
           )}
-        </div>
 
-        {/* Favorite Button */}
+          {outOfStock && (
+            <span className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 text-xs font-extrabold text-navy-700 backdrop-blur-[2px]">
+              {tCommon("outOfStock")}
+            </span>
+          )}
+        </Link>
+
+        {/* Favorite Button — sibling outside Link so clicking never bubbles into anchor navigation */}
         <div className="absolute top-2 start-2 z-10">
           <FavoriteButton productId={product.id} size="sm" />
         </div>
-
-        {/* Low Stock Pill */}
-        {lowStockQty && (
-          <span className="absolute bottom-2 start-2 z-10 rounded-full bg-amber-500/95 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-sm backdrop-blur-xs">
-            {locale === "ar" ? `باقي ${lowStockQty} فقط` : `Only ${lowStockQty} left`}
-          </span>
-        )}
-
-        {/* Rating Pill floating cleanly at bottom-end of image */}
-        {rating > 0 && (
-          <span className="absolute bottom-2 end-2 z-10 flex items-center gap-0.5 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-extrabold text-navy-900 shadow-sm backdrop-blur-xs">
-            <Star className="h-2.5 w-2.5 fill-gold-500 text-gold-500" aria-hidden />
-            {rating.toFixed(1)}
-          </span>
-        )}
-
-        {outOfStock && (
-          <span className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 text-xs font-extrabold text-navy-700 backdrop-blur-[2px]">
-            {tCommon("outOfStock")}
-          </span>
-        )}
-      </Link>
+      </div>
 
       {/* Details area */}
       <div className="flex flex-1 flex-col p-3">
@@ -127,3 +130,5 @@ export default function ProductCard({ product, locale }: { product: Product; loc
     </div>
   );
 }
+
+export default memo(ProductCard);

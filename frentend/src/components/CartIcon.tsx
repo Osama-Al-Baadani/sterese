@@ -2,11 +2,12 @@
 
 import { useTranslations } from "next-intl";
 import { ShoppingCart } from "lucide-react";
-import { useCart } from "@/lib/cart-context";
+import { useCartActions, useCartCount } from "@/lib/cart-context";
 
 export default function CartIcon() {
   const tNav = useTranslations("nav");
-  const { count, openDrawer } = useCart();
+  const count = useCartCount();
+  const { openDrawer } = useCartActions();
 
   return (
     <button

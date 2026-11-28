@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
-import { useCart } from "@/lib/cart-context";
+import { useCartActions } from "@/lib/cart-context";
 import SarPrice from "./SarPrice";
 
 type Status = "pending" | "paid" | "cod" | "failed";
@@ -23,7 +23,7 @@ interface OrderDetail {
 
 export default function OrderStatus({ orderId, accessKey }: { orderId: string; accessKey?: string }) {
   const t = useTranslations("orderStatus");
-  const { clear } = useCart();
+  const { clear } = useCartActions();
   const [status, setStatus] = useState<Status>("pending");
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const cleared = useRef(false);

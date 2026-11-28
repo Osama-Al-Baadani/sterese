@@ -4,14 +4,14 @@ import { Heart, Home, ShoppingCart, Store, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useCart } from "@/lib/cart-context";
-import { useFavorites } from "@/lib/favorites-context";
+import { useCartCount } from "@/lib/cart-context";
+import { useFavoritesCount } from "@/lib/favorites-context";
 
 export default function MobileBottomNav() {
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const { count } = useCart();
-  const { ids } = useFavorites();
+  const count = useCartCount();
+  const favoritesCount = useFavoritesCount();
   const { isLoggedIn, hydrated } = useAuth();
 
   const tabs = [
@@ -22,7 +22,7 @@ export default function MobileBottomNav() {
       href: "/favorites",
       label: t("favorites"),
       Icon: Heart,
-      badge: ids.length,
+      badge: favoritesCount,
       match: (p: string) => p === "/favorites",
     },
     {

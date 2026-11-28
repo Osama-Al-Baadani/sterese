@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Minus, Plus, ShoppingCart } from "lucide-react";
-import { useCart } from "@/lib/cart-context";
+import { useCartActions, useCartProductQty } from "@/lib/cart-context";
 import { effectiveMaxQty } from "@/lib/cart-limits";
 import { useToast } from "@/lib/toast-context";
 import type { Product, StoreSettings } from "@/lib/types";
@@ -22,11 +22,11 @@ export default function AddToCartControls({
   variation?: { id: number; label: string; price?: string; image?: string | null };
 }) {
   const tCommon = useTranslations("common");
-  const { items, addItem, setQuantity } = useCart();
+  const variationId = variation?.id ?? null;
+  const quantity = useCartProductQty(product.id, variationId);
+  const { addItem, setQuantity } = useCartActions();
   const { showToast } = useToast();
-  const inCart = items.find(
-    (i) => i.product.id === product.id && (i.variationId ?? null) === (variation?.id ?? null),
-  );
+  const inCart = quantity > 0;
   const maxQty = effectiveMaxQty(product, storeSettings, productQtyLimits);
 
   return (
@@ -35,17 +35,17 @@ export default function AddToCartControls({
         <div className="flex items-center justify-between rounded-full border border-brand-600 bg-brand-50 px-2 py-1.5">
           <button
             type="button"
-            onClick={() => setQuantity(product.id, inCart.quantity - 1)}
+            onClick={() => setQuantity(product.id, quantity - 1, variationId)}
             className="flex h-9 w-9 items-center justify-center rounded-full text-brand-700 hover:bg-brand-100"
             aria-label={tCommon("decreaseQty")}
           >
             <Minus className="h-4 w-4" aria-hidden />
           </button>
-          <span className="font-bold text-navy-900">{inCart.quantity}</span>
+          <span className="font-bold text-navy-900">{quantity}</span>
           <button
             type="button"
-            onClick={() => setQuantity(product.id, inCart.quantity + 1)}
-            disabled={inCart.quantity >= maxQty}
+            onClick={() => setQuantity(product.id, quantity + 1, variationId)}
+            disabled={quantity >= maxQty}
             className="flex h-9 w-9 items-center justify-center rounded-full text-brand-700 hover:bg-brand-100 disabled:opacity-40"
             aria-label={tCommon("increaseQty")}
           >

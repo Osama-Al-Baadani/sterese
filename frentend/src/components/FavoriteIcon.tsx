@@ -3,11 +3,11 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Heart } from "lucide-react";
-import { useFavorites } from "@/lib/favorites-context";
+import { useFavoritesCount } from "@/lib/favorites-context";
 
 export default function FavoriteIcon() {
   const tNav = useTranslations("nav");
-  const { ids } = useFavorites();
+  const count = useFavoritesCount();
 
   return (
     <Link
@@ -16,9 +16,9 @@ export default function FavoriteIcon() {
       aria-label={tNav("favorites")}
     >
       <Heart className="h-5 w-5" aria-hidden />
-      {ids.length > 0 && (
+      {count > 0 && (
         <span className="absolute -top-0.5 -left-0.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-navy-900 px-1 text-[10px] font-bold text-white ring-2 ring-brand-500">
-          {ids.length}
+          {count}
         </span>
       )}
     </Link>
